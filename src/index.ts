@@ -30,6 +30,16 @@ export { DecayEngine } from './decay-engine';
 export type { SweepResult } from './decay-engine';
 export { Compressor, ConcatenationStrategy } from './compressor';
 export type { ConsolidateOptions } from './compressor';
+export {
+  SemanticCompressionStrategy,
+  HierarchicalSemanticStrategy,
+  KeyExtractionStrategy,
+  createSemanticCompressor,
+} from './semantic-compressor';
+export type {
+  LLMFunction,
+  SemanticCompressionOptions,
+} from './semantic-compressor';
 export { MemorySpace, MemorySpaceManager } from './memory-space';
 export { VersionManager } from './version-manager';
 export { RecallEngine } from './recall-engine';
