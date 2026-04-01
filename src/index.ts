@@ -44,3 +44,12 @@ export { MemorySpace, MemorySpaceManager } from './memory-space';
 export { VersionManager } from './version-manager';
 export { RecallEngine } from './recall-engine';
 export { MemoryManager } from './memory-manager';
+export {
+  SemanticSearchAdapter,
+  OpenAIEmbeddings,
+  OllamaEmbeddings,
+} from './semantic-search';
+export type {
+  EmbeddingProvider,
+  SemanticSearchOptions,
+} from './semantic-search';
