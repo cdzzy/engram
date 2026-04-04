@@ -194,12 +194,13 @@ const manager = new MemoryManager({ store: new PostgreSQLStore(pool) });
 
 ## Roadmap
 
-- [ ] Semantic search adapter (bring-your-own embeddings)
-- [ ] Auto-importance scoring via LLM judge
+- [x] ~~Semantic search adapter~~ ✅ (src/semantic-search.ts)
+- [x] **Auto-importance scoring via LLM** (src/importance-scorer.ts — analyze memory content and assign importance level)
 - [ ] Shared memory between agents (multi-agent spaces)
 - [ ] Memory snapshot export/import
 - [ ] `engram` CLI for memory inspection
 - [ ] React hook: `useAgentMemory()`
+- [x] ~~RAG Adapter~~ ✅ (import/export from external RAG systems like LangChain, Pinecone)
 
 ---
 
