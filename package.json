@@ -1,4 +1,4 @@
-{
+﻿{
   "name": "engram",
   "version": "0.1.0",
   "description": "Standardized long-term memory for AI agents — forgetting curve compression, shared memory spaces, and memory versioning",
@@ -7,7 +7,10 @@
   "scripts": {
     "build": "tsc",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src --ext .ts",
+    "clean": "rimraf dist"
   },
   "keywords": [
     "agent",
@@ -29,3 +32,4 @@
     "vitest": "^3.2.0"
   }
 }
+
