@@ -211,7 +211,12 @@ export class HierarchicalSummarizer {
     anchor: number,
   ): string {
     const label = tier.toUpperCase();
-    const date = new Date(anchor).toISOString().split('T')[0];
+    // Use local date parts to avoid UTC/timezone shift on date string
+    const d = new Date(anchor);
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    const date = `${yyyy}-${mm}-${dd}`;
     const lines = sources
       .sort((a, b) => b.accessCount - a.accessCount)
       .map(e => `• [${e.importance}] ${e.content.slice(0, excerptLen)}`);
