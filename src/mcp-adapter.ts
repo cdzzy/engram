@@ -331,13 +331,29 @@ export class MCPToolsAdapter {
   // ── Tool implementations ─────────────────────────────────────────────────
 
   private async toolStore(args: Record<string, unknown>) {
+    const namespace = (args.namespace as string) ?? undefined;
+
+    // Auto-create the namespace if it doesn't exist (MCP clients shouldn't need to pre-create spaces)
+    if (namespace && namespace !== 'default') {
+      const existing = this.manager.spaces.getSpace(namespace);
+      if (!existing) {
+        this.manager.spaces.createSpace({
+          name: namespace,
+          maxCapacity: 0,
+          acl: { 'mcp-client': ['read', 'write', 'admin'] },
+          shared: true,
+          consolidationInterval: 0,
+        });
+      }
+    }
+
     const engram = await this.manager.encode({
       content: args.content as string,
       type: (args.type as MemoryType) ?? 'semantic',
       importance: (args.importance as ImportanceLevel) ?? 'medium',
       tags: (args.tags as string[]) ?? [],
       source: (args.source as string) ?? 'mcp-client',
-      namespace: (args.namespace as string) ?? undefined,
+      namespace,
     });
     return toolResult({ id: engram.id, content: engram.content, type: engram.type });
   }

@@ -1,9 +1,12 @@
 {
   "name": "engram",
   "version": "0.1.0",
-  "description": "Standardized long-term memory for AI agents — forgetting curve compression, shared memory spaces, and memory versioning",
+  "description": "Standardized long-term memory for AI agents — forgetting curve compression, shared memory spaces, memory versioning, and MCP stdio server",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "bin": {
+    "engram-mcp": "./dist/mcp-stdio.js"
+  },
   "scripts": {
     "build": "tsc",
     "test": "vitest run",
@@ -22,14 +25,18 @@
     "shared-memory",
     "memory-versioning",
     "ai-agent",
-    "llm"
+    "llm",
+    "mcp",
+    "model-context-protocol",
+    "stdio",
+    "memory-graph"
   ],
   "author": "cdzzy",
   "license": "MIT",
   "devDependencies": {
     "@types/node": "^25.5.0",
+    "tsx": "^4.21.0",
     "typescript": "^5.7.0",
-    "vitest": "^3.2.0"
+    "vitest": "^2.1.9"
   }
 }
-

@@ -59,7 +59,11 @@ export type {
 export { LLMImportanceScorer } from './importance-scorer';
 export type { LLMImportanceScorerConfig } from './importance-scorer';
 
-// MCP Server adapter — expose Engram as an MCP-compatible tool server
+// MCP Server adapter — expose Engram as an MCP-compatible tool server (HTTP)
 export { MCPToolsAdapter } from './mcp-adapter';
 
+// MCP stdio Server — structured long-term memory with stdio transport +
+// differential tools: engram_link, engram_related, engram_timeline,
+// engram_namespaces, engram_forget
+export { EngramMCPStdioServer } from './mcp-stdio';
 
