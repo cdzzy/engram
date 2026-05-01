@@ -5,7 +5,7 @@
  * Formats: JSON, JSONL, Markdown (for human readability)
  */
 
-import type { Engram, MemorySpace } from './types.js';
+import type { Engram } from './types.js';
 
 export interface ExportOptions {
   format: 'json' | 'jsonl' | 'markdown';
@@ -25,6 +25,7 @@ export interface ImportOptions {
   namespace?: string;
   overwriteExisting?: boolean;
   updateTimestamps?: boolean;
+  includeEmbeddings?: boolean;
 }
 
 /**

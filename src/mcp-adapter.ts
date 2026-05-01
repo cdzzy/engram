@@ -360,12 +360,12 @@ export class MCPToolsAdapter {
 
   private async toolRecall(args: Record<string, unknown>) {
     const results = await this.manager.query({
-      keywords: (args.keywords as string[]) ?? [],
+      text: (args.text as string) ?? undefined,
+      tags: (args.tags as string[]) ?? undefined,
       type: (args.type as MemoryType) ?? undefined,
       namespace: (args.namespace as string) ?? undefined,
       minStrength: (args.minStrength as number) ?? 0.1,
       limit: (args.limit as number) ?? 10,
-      agentId: (args.agentId as string) ?? 'mcp-client',
     });
     return toolResult(
       results.map((r) => ({
@@ -411,10 +411,10 @@ export class MCPToolsAdapter {
 
   private async toolConsolidate(args: Record<string, unknown>) {
     const results = await this.manager.consolidate(
-      args.namespace || args.strengthThreshold
+      args.namespace || args.maxStrength
         ? {
             namespace: args.namespace as string | undefined,
-            strengthThreshold: args.strengthThreshold as number | undefined,
+            maxStrength: args.maxStrength as number | undefined,
           }
         : undefined,
     );

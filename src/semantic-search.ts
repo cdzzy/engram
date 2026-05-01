@@ -7,8 +7,8 @@
  * Reference: Inspired by supermemory and Mem0 semantic search patterns.
  */
 
-import { MemoryManager, Engram } from "./engram";
-import type { MemoryStore } from "./types";
+import { MemoryManager } from "./memory-manager";
+import type { Engram, MemoryStore, MemoryType } from "./types";
 
 export interface EmbeddingProvider {
   embed(text: string): Promise<number[]>;
@@ -116,16 +116,17 @@ export class SemanticSearchAdapter {
 
     const queryEmbedding = await this.embeddings.embed(query);
 
-    const candidates = await this.memory.recall({
-      query,
+    const candidates = await this.memory.query({
+      text: query,
       limit: limit * 3,
-      types,
+      type: types?.[0] as MemoryType | undefined,
       tags,
     });
 
     const scored: Array<{ memory: Engram; score: number; source: string }> = [];
 
-    for (const memory of candidates) {
+    for (const result of candidates) {
+      const memory = result.engram;
       if (since && memory.createdAt < since) continue;
 
       const importanceScore = this._importanceToScore(memory.importance);

@@ -7,10 +7,10 @@
  * 灵感来源：Rowboat "Open-source AI coworker, with memory"
  */
 
-import { MemoryEntry } from "./types";
+import { Engram } from "./types";
 
 export interface RecallResult {
-  entry: MemoryEntry;
+  entry: Engram;
   similarity: number; // 0-1 相似度分数
   rank: number;
 }
@@ -27,7 +27,7 @@ export interface RecallOptions {
  * 融合了 Rowboat 的"长期记忆"和 engram 自身的时间衰减模型。
  */
 export class SemanticRecall {
-  private memoryStore: MemoryEntry[] = [];
+  private memoryStore: Engram[] = [];
   private embeddingFn?: (text: string) => Promise<number[]>;
 
   constructor(embeddingFn?: (text: string) => Promise<number[]>) {
@@ -38,7 +38,7 @@ export class SemanticRecall {
    * 索引记忆条目以支持语义检索。
    * 可以批量索引以提高效率。
    */
-  async index(entries: MemoryEntry[]): Promise<void> {
+  async index(entries: Engram[]): Promise<void> {
     if (this.embeddingFn) {
       // 批量生成嵌入向量
       const texts = entries.map((e) => `${e.content} ${e.tags.join(" ")}`);
@@ -78,7 +78,7 @@ export class SemanticRecall {
 
       // 应用时间衰减增强（近期记忆优先）
       if (decayBoost) {
-        const ageHours = (Date.now() - entry.timestamp) / 3_600_000;
+        const ageHours = (Date.now() - entry.createdAt) / 3_600_000;
         const decayFactor = Math.exp(-ageHours / 168); // 7天半衰期
         score = score * 0.7 + decayFactor * 0.3;
       }
