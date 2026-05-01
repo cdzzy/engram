@@ -31,11 +31,14 @@
  *
  * New tools added in this module (differential tools)
  * -----------------------------------------------------
- * - engram_link         Link two memories with a typed relationship
- * - engram_related      Find memories linked to a given memory
- * - engram_timeline     Query memories created/accessed within a time window
- * - engram_namespaces   List available memory namespaces
- * - engram_forget       Explicitly delete a memory (force-forget)
+ * - engram_link                  Link two memories with a typed relationship
+ * - engram_related               Find memories linked to a given memory
+ * - engram_timeline              Query memories created/accessed within a time window
+ * - engram_namespaces            List available memory namespaces
+ * - engram_forget                Explicitly delete a memory (force-forget)
+ * - engram_observe_tool_call     Record a tool call as behavioral memory
+ * - engram_observe_file          Record a file change as behavioral memory
+ * - engram_observe_decision      Record an agent decision as semantic memory
  *
  * Usage (stdio server)
  * --------------------
@@ -60,6 +63,8 @@ import * as readline from 'readline';
 import type { MemoryManager } from './memory-manager';
 import type { MemoryType, ImportanceLevel, Engram } from './types';
 import { MCPToolsAdapter } from './mcp-adapter';
+import { BehaviorObserver } from './behavior-observer';
+import type { BehaviorObserverConfig } from './behavior-observer';
 
 // ── Link store (in-memory graph) ─────────────────────────────────────────────
 
@@ -187,6 +192,71 @@ const DIFFERENTIAL_TOOL_DEFINITIONS = [
       required: ['id'],
     },
   },
+  // ── Behavior tools ─────────────────────────────────────────────────────────
+  {
+    name: 'engram_observe_tool_call',
+    description:
+      'Record a tool call as a behavioral memory. Reports what tool was called, with what parameters, and what result was returned. Errors are also captured. This enables "memory from what agents do" — building up a factual record of the agent\'s actions over time.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        tool: { type: 'string', description: 'Name of the tool that was called.' },
+        params: {
+          type: 'object',
+          description: 'Parameters that were passed to the tool.',
+          additionalProperties: true,
+        },
+        result: { description: 'Return value of the tool. Any JSON-serializable value.' },
+        durationMs: { type: 'number', description: 'Optional: how long the tool call took (ms).' },
+        error: { type: 'string', description: 'Optional: error message if the call failed.' },
+        namespace: { type: 'string', description: 'Memory namespace (default: "behavior").' },
+      },
+      required: ['tool', 'params'],
+    },
+  },
+  {
+    name: 'engram_observe_file',
+    description:
+      'Record a file system change as a behavioral memory. Captures file path, type of change (create/modify/delete/read), and optional metadata. Useful for tracking what files the agent has touched in a session.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        path: { type: 'string', description: 'File path that was changed or accessed.' },
+        change: {
+          type: 'string',
+          enum: ['create', 'modify', 'delete', 'read'],
+          description: 'Type of file change.',
+        },
+        meta: {
+          type: 'object',
+          description: 'Optional metadata (e.g. { size: 1200, lines: 42, language: "TypeScript" }).',
+          additionalProperties: true,
+        },
+        namespace: { type: 'string', description: 'Memory namespace (default: "behavior").' },
+      },
+      required: ['path', 'change'],
+    },
+  },
+  {
+    name: 'engram_observe_decision',
+    description:
+      'Record an agent decision as a semantic memory. Captures the decision context, the choice made, the reasoning, and any alternatives considered. Decisions are stored as semantic memories so they can be recalled when similar situations arise.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        context: { type: 'string', description: 'What situation or trigger prompted this decision?' },
+        choice: { type: 'string', description: 'What did the agent decide to do?' },
+        reason: { type: 'string', description: 'Why was this choice made? The reasoning.' },
+        alternatives: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Optional: other options that were considered.',
+        },
+        namespace: { type: 'string', description: 'Memory namespace (default: "behavior").' },
+      },
+      required: ['context', 'choice', 'reason'],
+    },
+  },
 ] as const;
 
 // ── Tool result helper ────────────────────────────────────────────────────────
@@ -208,14 +278,16 @@ function toolResult(content: unknown, isError = false) {
 export class EngramMCPStdioServer {
   private httpAdapter: MCPToolsAdapter;
   private links: LinkStore;
+  private behaviorObserver: BehaviorObserver;
   readonly manager: MemoryManager;
 
   static readonly MCP_VERSION = '2024-11-05';
 
-  constructor(manager: MemoryManager) {
+  constructor(manager: MemoryManager, behaviorConfig?: BehaviorObserverConfig) {
     this.manager = manager;
     this.httpAdapter = new MCPToolsAdapter(manager);
     this.links = new LinkStore();
+    this.behaviorObserver = new BehaviorObserver(manager, behaviorConfig);
   }
 
   // ── All tool definitions (base + differential) ───────────────────────────
@@ -440,6 +512,71 @@ export class EngramMCPStdioServer {
     });
   }
 
+  // ── Behavior tool implementations ─────────────────────────────────────────
+
+  private async toolObserveToolCall(args: Record<string, unknown>) {
+    const tool = args.tool as string;
+    const params = (args.params as Record<string, unknown>) ?? {};
+    const result = args.result;
+    const durationMs = args.durationMs as number | undefined;
+    const error = args.error as string | undefined;
+    const namespace = args.namespace as string | undefined;
+
+    const observer = namespace
+      ? new BehaviorObserver(this.manager, { namespace })
+      : this.behaviorObserver;
+
+    await observer.onToolCall(tool, params, result, { durationMs, error });
+
+    return toolResult({
+      observed: true,
+      tool,
+      importance: error ? 'high' : 'auto-inferred',
+      namespace: namespace ?? 'behavior',
+    });
+  }
+
+  private async toolObserveFile(args: Record<string, unknown>) {
+    const path = args.path as string;
+    const change = args.change as 'create' | 'modify' | 'delete' | 'read';
+    const meta = (args.meta as Record<string, unknown>) ?? {};
+    const namespace = args.namespace as string | undefined;
+
+    const observer = namespace
+      ? new BehaviorObserver(this.manager, { namespace, captureFileChanges: true, captureToolCalls: true, captureDecisions: true })
+      : this.behaviorObserver;
+
+    await observer.onFileChange(path, change, meta);
+
+    return toolResult({
+      observed: true,
+      path,
+      change,
+      namespace: namespace ?? 'behavior',
+    });
+  }
+
+  private async toolObserveDecision(args: Record<string, unknown>) {
+    const context = args.context as string;
+    const choice = args.choice as string;
+    const reason = args.reason as string;
+    const alternatives = (args.alternatives as string[]) ?? [];
+    const namespace = args.namespace as string | undefined;
+
+    const observer = namespace
+      ? new BehaviorObserver(this.manager, { namespace, captureDecisions: true, captureToolCalls: true, captureFileChanges: true })
+      : this.behaviorObserver;
+
+    await observer.onDecision(context, choice, reason, alternatives);
+
+    return toolResult({
+      observed: true,
+      choice,
+      namespace: namespace ?? 'behavior',
+      alternativesConsidered: alternatives.length,
+    });
+  }
+
   // ── Request dispatcher ────────────────────────────────────────────────────
 
   async handleRequest(body: unknown): Promise<unknown> {
@@ -498,11 +635,14 @@ export class EngramMCPStdioServer {
   ): Promise<unknown> {
     // Differential tools (handled here)
     switch (toolName) {
-      case 'engram_link':        return this.toolLink(args);
-      case 'engram_related':     return this.toolRelated(args);
-      case 'engram_timeline':    return this.toolTimeline(args);
-      case 'engram_namespaces':  return this.toolNamespaces();
-      case 'engram_forget':      return this.toolForget(args);
+      case 'engram_link':               return this.toolLink(args);
+      case 'engram_related':            return this.toolRelated(args);
+      case 'engram_timeline':           return this.toolTimeline(args);
+      case 'engram_namespaces':         return this.toolNamespaces();
+      case 'engram_forget':             return this.toolForget(args);
+      case 'engram_observe_tool_call':  return this.toolObserveToolCall(args);
+      case 'engram_observe_file':       return this.toolObserveFile(args);
+      case 'engram_observe_decision':   return this.toolObserveDecision(args);
     }
 
     // Base tools — delegate to existing MCPToolsAdapter
@@ -512,7 +652,7 @@ export class EngramMCPStdioServer {
       method: 'tools/call',
       params: { name: toolName, arguments: args },
     };
-    const rpcResp = await this.httpAdapter.handleRequest(rpcBody) as Record<string, unknown>;
+    const rpcResp = (await this.httpAdapter.handleRequest(rpcBody)) as unknown as Record<string, unknown>;
     if ('error' in rpcResp) {
       throw new Error((rpcResp['error'] as Record<string, string>)?.['message'] ?? 'Tool error');
     }

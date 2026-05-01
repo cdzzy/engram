@@ -1,7 +1,7 @@
 {
   "name": "engram",
-  "version": "0.1.0",
-  "description": "Standardized long-term memory for AI agents — forgetting curve compression, shared memory spaces, memory versioning, and MCP stdio server",
+  "version": "0.2.0",
+  "description": "Standardized long-term memory for AI agents — forgetting curve, behavior observer, shared memory spaces, memory versioning, and MCP stdio server",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
@@ -24,6 +24,8 @@
     "multi-agent",
     "shared-memory",
     "memory-versioning",
+    "behavior-observer",
+    "behavioral-memory",
     "ai-agent",
     "llm",
     "mcp",

@@ -65,5 +65,15 @@ export { MCPToolsAdapter } from './mcp-adapter';
 // MCP stdio Server — structured long-term memory with stdio transport +
 // differential tools: engram_link, engram_related, engram_timeline,
 // engram_namespaces, engram_forget
+// behavior tools: engram_observe_tool_call, engram_observe_file, engram_observe_decision
 export { EngramMCPStdioServer } from './mcp-stdio';
+
+// BehaviorObserver — capture agent behaviors as memories (tool calls, file changes, decisions)
+export { BehaviorObserver } from './behavior-observer';
+export type {
+  BehaviorObserverConfig,
+  ToolCallEvent,
+  FileChangeEvent,
+  DecisionEvent,
+} from './behavior-observer';
 

@@ -129,11 +129,11 @@ describe('EngramMCPStdioServer — tools/list', () => {
     expect(names).toContain('engram_forget');
   });
 
-  it('total tool count is 12 (7 base + 5 differential)', async () => {
+  it('total tool count is 15 (7 base + 5 differential + 3 behavior)', async () => {
     const server = makeServer();
     const resp = await rpc(server, 'tools/list');
     const tools = (resp['result'] as Record<string, unknown>)['tools'] as unknown[];
-    expect(tools.length).toBe(12);
+    expect(tools.length).toBe(15);
   });
 });
 
