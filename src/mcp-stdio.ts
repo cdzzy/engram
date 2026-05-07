@@ -65,6 +65,7 @@ import type { MemoryType, ImportanceLevel, Engram } from './types';
 import { MCPToolsAdapter } from './mcp-adapter';
 import { BehaviorObserver } from './behavior-observer';
 import type { BehaviorObserverConfig } from './behavior-observer';
+import { ThreeLayerExtension, THREE_LAYER_TOOL_DEFINITIONS } from './three-layer-interface';
 
 // ── Link store (in-memory graph) ─────────────────────────────────────────────
 
@@ -279,6 +280,7 @@ export class EngramMCPStdioServer {
   private httpAdapter: MCPToolsAdapter;
   private links: LinkStore;
   private behaviorObserver: BehaviorObserver;
+  private threeLayer: ThreeLayerExtension;
   readonly manager: MemoryManager;
 
   static readonly MCP_VERSION = '2024-11-05';
@@ -288,6 +290,7 @@ export class EngramMCPStdioServer {
     this.httpAdapter = new MCPToolsAdapter(manager);
     this.links = new LinkStore();
     this.behaviorObserver = new BehaviorObserver(manager, behaviorConfig);
+    this.threeLayer = new ThreeLayerExtension(manager);
   }
 
   // ── All tool definitions (base + differential) ───────────────────────────
@@ -384,7 +387,7 @@ export class EngramMCPStdioServer {
         },
       },
     ];
-    return [...BASE_TOOLS, ...DIFFERENTIAL_TOOL_DEFINITIONS];
+    return [...BASE_TOOLS, ...DIFFERENTIAL_TOOL_DEFINITIONS, ...THREE_LAYER_TOOL_DEFINITIONS];
   }
 
   // ── Differential tool implementations ────────────────────────────────────
@@ -644,6 +647,10 @@ export class EngramMCPStdioServer {
       case 'engram_observe_file':       return this.toolObserveFile(args);
       case 'engram_observe_decision':   return this.toolObserveDecision(args);
     }
+
+    // Three-layer interface (Episode / Fact / Working Context)
+    const threeLayerResult = await this.threeLayer.dispatch(toolName, args);
+    if (threeLayerResult !== null) return threeLayerResult;
 
     // Base tools — delegate to existing MCPToolsAdapter
     const rpcBody = {

@@ -74,6 +74,10 @@ export interface DecayConfig {
   recallBoostFactor: number;
   /** Importance-based stability multipliers */
   importanceMultiplier: Record<ImportanceLevel, number>;
+  /** Memory-type-based half-life multipliers (default: 1.0 for all) */
+  memoryTypeMultiplier?: Partial<Record<MemoryType, number>>;
+  /** Access frequency factor: extra stability = log(1 + accessCount) × this factor */
+  accessFrequencyFactor?: number;
   /** Strength threshold below which status becomes 'decayed' */
   decayThreshold: number;
   /** Strength threshold below which memory is archived */
@@ -92,6 +96,13 @@ export const DEFAULT_DECAY_CONFIG: DecayConfig = {
     low: 1.0,
     trivial: 0.5,
   },
+  memoryTypeMultiplier: {
+    episodic: 1.0,    // Standard decay for events
+    semantic: 2.0,     // Facts decay slower
+    procedural: 3.0,   // Skills decay much slower
+    working: 0.05,     // Working memory decays very fast (minutes)
+  },
+  accessFrequencyFactor: 0.3,  // log(1 + accessCount) × 0.3 extra stability
   decayThreshold: 0.3,
   archiveThreshold: 0.1,
   forgetThreshold: 0.02,

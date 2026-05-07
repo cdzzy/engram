@@ -432,11 +432,11 @@ describe('EngramMCPStdioServer — behavior tools', () => {
     expect(names).toContain('engram_observe_decision');
   });
 
-  it('total tool count is 15 (7 base + 5 differential + 3 behavior)', async () => {
+  it('total tool count is 25 (7 base + 5 differential + 3 behavior + 10 three-layer)', async () => {
     const server = makeServer();
     const resp = await rpc(server, 'tools/list');
     const tools = (resp['result'] as Record<string, unknown>)['tools'] as unknown[];
-    expect(tools.length).toBe(15);
+    expect(tools.length).toBe(25);
   });
 
   it('engram_observe_tool_call stores a memory', async () => {

@@ -34,20 +34,31 @@ export class DecayEngine {
     return Math.max(0, Math.min(1, retention));
   }
 
-  /** Get effective stability = baseHalfLife × stability × importanceMultiplier */
+  /** Get effective stability = baseHalfLife × stability × importanceMultiplier × memoryTypeMultiplier × accessFrequency */
   getEffectiveStability(engram: Engram): number {
     const importanceMult = this.config.importanceMultiplier[engram.importance];
-    // Convert half-life to decay constant: S = halfLife / ln(2)
-    const decayConstant = this.config.baseHalfLife / Math.LN2;
-    return decayConstant * engram.stability * importanceMult;
+    const typeMult = this.config.memoryTypeMultiplier?.[engram.type] ?? 1.0;
+    const freqFactor = this.config.accessFrequencyFactor ?? 0;
+    const accessBoost = 1 + Math.log1p(engram.accessCount) * freqFactor;
+
+    // Effective half-life = baseHalfLife × typeMult
+    // S = halfLife / ln(2) × stability × importanceMult × accessBoost
+    const effectiveHalfLife = this.config.baseHalfLife * typeMult;
+    const decayConstant = effectiveHalfLife / Math.LN2;
+    return decayConstant * engram.stability * importanceMult * accessBoost;
   }
 
   /**
    * Reinforce a memory after a successful recall.
    * Applies the spacing effect — stability grows with each access.
+   * @param usefulness - Optional 0–1 score indicating how useful the recall was.
+   *                    1.0 = fully useful (full boost), 0.0 = not useful (no boost).
    */
-  reinforce(engram: Engram, now: number = Date.now()): Engram {
-    const newStability = engram.stability * this.config.recallBoostFactor;
+  reinforce(engram: Engram, now: number = Date.now(), usefulness?: number): Engram {
+    const boostFactor = usefulness !== undefined
+      ? 1 + (this.config.recallBoostFactor - 1) * Math.max(0, Math.min(1, usefulness))
+      : this.config.recallBoostFactor;
+    const newStability = engram.stability * boostFactor;
     return {
       ...engram,
       strength: 1.0,  // Reset to full strength on recall

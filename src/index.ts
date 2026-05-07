@@ -66,7 +66,11 @@ export { MCPToolsAdapter } from './mcp-adapter';
 // differential tools: engram_link, engram_related, engram_timeline,
 // engram_namespaces, engram_forget
 // behavior tools: engram_observe_tool_call, engram_observe_file, engram_observe_decision
+// three-layer interface: engram_episode_* / engram_fact_* / engram_context_*
 export { EngramMCPStdioServer } from './mcp-stdio';
+
+// Three-Layer MCP Interface — Episode / Fact / Working Context
+export { ThreeLayerExtension, THREE_LAYER_TOOL_DEFINITIONS } from './three-layer-interface';
 
 // BehaviorObserver — capture agent behaviors as memories (tool calls, file changes, decisions)
 export { BehaviorObserver } from './behavior-observer';
