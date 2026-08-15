@@ -20,6 +20,9 @@ export type {
   MemoryFilter,
   MemoryEvents,
   MemoryManagerConfig,
+  ImportanceScorer,
+  ConflictPolicy,
+  ConflictResolver,
 } from './types';
 
 export { IMPORTANCE_WEIGHTS, DEFAULT_DECAY_CONFIG, TypedEmitter } from './types';
@@ -27,6 +30,17 @@ export { createEngram } from './engram';
 export type { CreateEngramOptions } from './engram';
 export { InMemoryStore } from './storage/in-memory';
 export { FileStore } from './storage/file-store';
+export { EncryptedStore, generateEncryptionKey } from './encrypted-store';
+export type { EncryptedStoreConfig } from './encrypted-store';
+export { GraphMemory } from './graph-memory';
+export type {
+  GraphEntity,
+  GraphRelation,
+  ExtractionResult,
+  TraversalNode,
+  GraphMemoryConfig,
+  GraphMemoryStats,
+} from './graph-memory';
 export { DecayEngine } from './decay-engine';
 export type { SweepResult } from './decay-engine';
 export { Compressor, ConcatenationStrategy } from './compressor';

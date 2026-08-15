@@ -433,14 +433,12 @@ export class MCPToolsAdapter {
     const host = options.host ?? '127.0.0.1';
     const port = options.port ?? 8766;
 
-    const adapter = this;
-
     const server = http.createServer(async (req, res) => {
       // ── GET / info ──────────────────────────────────────────
       if (req.method === 'GET') {
         const info = {
-          name: adapter.serverName,
-          version: adapter.serverVersion,
+          name: this.serverName,
+          version: this.serverVersion,
           protocol: MCPToolsAdapter.MCP_VERSION,
           tools: TOOL_DEFINITIONS.map((t) => t.name),
         };
@@ -465,7 +463,7 @@ export class MCPToolsAdapter {
             return;
           }
 
-          const response = await adapter.handleRequest(body);
+          const response = await this.handleRequest(body);
           const statusCode = 'error' in response ? 400 : 200;
           const responseBody = JSON.stringify(response);
           res.writeHead(statusCode, { 'Content-Type': 'application/json' });
@@ -497,13 +495,12 @@ export class MCPToolsAdapter {
   serveBackground(options: { host?: string; port?: number } = {}): http.Server {
     const host = options.host ?? '127.0.0.1';
     const port = options.port ?? 8766;
-    const adapter = this;
 
     const server = http.createServer(async (req, res) => {
       if (req.method === 'GET') {
         const info = {
-          name: adapter.serverName,
-          version: adapter.serverVersion,
+          name: this.serverName,
+          version: this.serverVersion,
           protocol: MCPToolsAdapter.MCP_VERSION,
         };
         res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -516,7 +513,7 @@ export class MCPToolsAdapter {
         req.on('end', async () => {
           let body: unknown;
           try { body = JSON.parse(Buffer.concat(chunks).toString('utf-8')); } catch { body = {}; }
-          const response = await adapter.handleRequest(body);
+          const response = await this.handleRequest(body);
           const statusCode = 'error' in response ? 400 : 200;
           res.writeHead(statusCode, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify(response));

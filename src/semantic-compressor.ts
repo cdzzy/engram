@@ -78,7 +78,7 @@ export class SemanticCompressionStrategy implements CompressionStrategy {
 
       // Simple extraction: combine first parts of each memory
       const combined = memories
-        .map(m => m.replace(/^[-\[\]\s]+/, '').slice(0, 100))
+        .map(m => m.replace(/^[-[\]\s]+/, '').slice(0, 100))
         .join('; ');
 
       return `Key points: ${combined.slice(0, this.maxLength)}`;

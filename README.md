@@ -27,6 +27,10 @@ Every LLM context window is ephemeral. Close the session, and the agent forgets 
 - 🗜️ **Compression** — consolidate old memories to save context budget
 - 📦 **Memory spaces** — isolated namespaces per agent/session/project
 - 🔄 **Versioning** — track how memories evolve over time
+- 🤖 **Auto importance scoring** — LLM-as-judge scorer integrated into `encode()` (Issue #1)
+- ⚖️ **Conflict resolution** — `last-writer-wins` / `merge` / `version` / custom policies for shared namespaces (Issue #3)
+- 🕸️ **GraphRAG memory** — entity/relation extraction with multi-hop traversal (Issue #5)
+- 🔐 **Encryption at rest** — AES-256-GCM transparent content encryption (Issue #8)
 - 💾 **Pluggable storage** — in-memory (default), **FileStore (new: filesystem persistence, zero deps)**, SQLite, PostgreSQL adapters
 - 🔌 **MCP Server** — expose memory as MCP tools, callable from Claude Code, Cursor, Cline
 - 🎯 **Zero dependencies** — core library uses only Node.js built-ins
@@ -178,6 +182,22 @@ await store.flush();
 Each memory is stored as an individual JSON file. A lightweight `_index.json`
 enables fast queries without reading every file. No external dependencies required.
 
+### EncryptedStore (AES-256-GCM encryption at rest)
+```typescript
+import { EncryptedStore, FileStore, MemoryManager } from 'engram';
+
+const inner = new FileStore('.agent/memory');
+await inner.init();
+
+const store = new EncryptedStore(inner, {
+  keySource: 'env:ENGRAM_ENCRYPTION_KEY',  // or key: '<64-char hex>'
+});
+const manager = new MemoryManager({}, store);
+```
+
+Content is transparently encrypted before writing and decrypted on read.
+Structural fields stay queryable so decay/filtering still work.
+
 ### SQLite (persistent, multi-session)
 ```typescript
 import { SQLiteStore } from 'engram/storage/sqlite';
@@ -186,6 +206,28 @@ import BetterSQLite3 from 'better-sqlite3';
 const db = new BetterSQLite3('./agent-memory.db');
 const manager = new MemoryManager({}, new SQLiteStore(db));
 ```
+
+---
+
+## GraphRAG Memory (multi-hop retrieval)
+
+Traverse relationships between entities to answer multi-hop questions:
+
+```typescript
+import { GraphMemory } from 'engram';
+
+const graph = new GraphMemory({ autoExtract: true });
+
+await graph.store("Alice approved Bob's vacation request");
+await graph.store('Bob works_with Carol');
+
+// Who is connected to Alice, up to 2 hops away?
+const reachable = graph.traverse('Alice', { maxHops: 2 });
+// → Alice (depth 0), Bob (approved, depth 1), Carol (works_with, depth 2)
+```
+
+Plug in an LLM extractor via `new GraphMemory({ extractor: myExtractor })`
+for richer entity/relation extraction.
 
 ---
 
@@ -250,8 +292,11 @@ Exposed MCP tools:
 ## Roadmap
 
 - [x] **Semantic search adapter** (bring-your-own embeddings) ✅ (src/semantic-search.ts)
-- [x] **Auto-importance scoring via LLM judge** ✅ (src/importance-scorer.ts)
+- [x] **Auto-importance scoring via LLM judge** ✅ (src/importance-scorer.ts, integrated in v0.5.0)
 - [x] **Shared memory between agents** (multi-agent memory spaces) ✅ (src/memory-space.ts)
+- [x] **Conflict resolution policies** (last-writer-wins / merge / version / custom) ✅ (v0.5.0)
+- [x] **GraphRAG memory** (entity/relation extraction + multi-hop traversal) ✅ (src/graph-memory.ts, v0.5.0)
+- [x] **Encryption at rest** (AES-256-GCM) ✅ (src/encrypted-store.ts, v0.5.0)
 - [x] **FileStore** (filesystem persistence, zero dependencies) ✅ (src/storage/file-store.ts)
 - [x] **MCP Server** (expose memory as MCP tools) ✅ (src/mcp-adapter.ts)
 - [ ] Memory snapshot export/import

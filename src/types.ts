@@ -254,6 +254,32 @@ export class TypedEmitter extends EventEmitter {
   }
 }
 
+// ─── Importance Scoring ──────────────────────────────────────────────────────
+
+/** Auto-scores memory importance from content. May be async (LLM) or sync. */
+export type ImportanceScorer = (
+  content: string,
+  type: MemoryType,
+) => ImportanceLevel | Promise<ImportanceLevel>;
+
+// ─── Conflict Resolution ─────────────────────────────────────────────────────
+
+/**
+ * Strategy for resolving concurrent writes to the same memory in a shared
+ * namespace by multiple agents.
+ */
+export type ConflictPolicy = 'last-writer-wins' | 'merge' | 'version' | 'custom';
+
+/**
+ * Custom conflict resolver. Return the resolved Engram, or null to keep the
+ * existing memory unchanged.
+ */
+export type ConflictResolver = (
+  existing: Engram,
+  incoming: Engram,
+  context: { agentId: string; namespace: string },
+) => Engram | null | Promise<Engram | null>;
+
 // ─── Manager Config ──────────────────────────────────────────────────────────
 
 export interface MemoryManagerConfig {
@@ -266,5 +292,11 @@ export interface MemoryManagerConfig {
   decaySweepInterval?: number;
   /** Custom compression strategy (default: concatenation) */
   compressionStrategy?: CompressionStrategy;
+  /** Optional importance scorer — auto-scores memories when importance is omitted */
+  importanceScorer?: ImportanceScorer;
+  /** Conflict resolution policy for shared namespaces (default: last-writer-wins) */
+  conflictPolicy?: ConflictPolicy;
+  /** Custom conflict resolver (used when conflictPolicy is 'custom') */
+  onConflict?: ConflictResolver;
 }
 

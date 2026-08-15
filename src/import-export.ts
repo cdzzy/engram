@@ -177,7 +177,7 @@ function importFromJson(data: string, options: ImportOptions): Partial<Engram>[]
     const memories = Array.isArray(parsed) ? parsed : [parsed];
     return memories.map((m) => transformImport(m, options));
   } catch (e) {
-    throw new Error(`Invalid JSON format: ${e}`);
+    throw new Error(`Invalid JSON format: ${e}`, { cause: e });
   }
 }
 
@@ -206,7 +206,7 @@ function importFromMarkdown(data: string, options: ImportOptions): Partial<Engra
 
     const lines = section.split('\n');
     const contentLines: string[] = [];
-    let metadata: Record<string, string> = {};
+    const metadata: Record<string, string> = {};
 
     for (const line of lines) {
       if (line.startsWith('### Content')) {
