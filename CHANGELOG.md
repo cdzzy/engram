@@ -2,6 +2,12 @@
 
 All notable changes to Engram are documented in this file.
 
+## [0.6.0] - 2026-08-19
+
+### Added
+
+- **`engram` CLI for memory inspection**: `stats`, `list`, `search`, `show`, `forget`, and `spaces` commands against a `FileStore` (default `~/.engram`). `show`/`forget` accept full IDs or unique 8-char prefixes (git-style). Errors are typed (`CliError`) so command logic stays testable; the bin entry lives in a separate `cli-main.ts`.
+
 ## [0.5.0] - 2026-08-15
 
 ### Added
