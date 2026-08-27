@@ -91,7 +91,7 @@ describe('MemoryManager', () => {
       await mm.encode({ content: 'TypeScript is typed', type: 'semantic', source: 'agent-1', tags: ['lang'] });
       await mm.encode({ content: 'Meeting at 3pm', type: 'episodic', source: 'agent-1', tags: ['meeting'] });
 
-      const results = await mm.query({ text: 'TypeScript', limit: 2, reinforce: false });
+      const results = await mm.query({ text: 'TypeScript', limit: 2, reinforce: false, recencyBias: 0 });
       expect(results.length).toBeGreaterThanOrEqual(1);
       expect(results[0].engram.content).toContain('TypeScript');
       mm.stop();
