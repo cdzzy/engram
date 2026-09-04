@@ -299,7 +299,7 @@ Exposed MCP tools:
 - [x] **Encryption at rest** (AES-256-GCM) ✅ (src/encrypted-store.ts, v0.5.0)
 - [x] **FileStore** (filesystem persistence, zero dependencies) ✅ (src/storage/file-store.ts)
 - [x] **MCP Server** (expose memory as MCP tools) ✅ (src/mcp-adapter.ts)
-- [ ] Memory snapshot export/import
+- [x] **Memory snapshot export/import** (`exportSnapshot` / `importSnapshot` + `engram export` / `engram import` CLI) ✅ (v0.7.0)
 - [ ] `engram` CLI for memory inspection
 - [ ] React hook: `useAgentMemory()`
 - [ ] OpenClaw `.agent/memory` format compatibility layer

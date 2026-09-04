@@ -60,12 +60,17 @@ export class FileStore implements MemoryStore {
   /**
    * Create the storage directory if it doesn't exist, and load the index.
    * Must be called once before using the store.
+   *
+   * The index is always rebuilt from the memory files on disk: the files are
+   * the source of truth, and a cached `_index.json` can be stale when another
+   * FileStore instance wrote memories whose index flush (debounced) has not
+   * landed yet.
    */
   async init(): Promise<void> {
     if (!fs.existsSync(this.storageDir)) {
       fs.mkdirSync(this.storageDir, { recursive: true });
     }
-    await this.loadIndex();
+    await this.rebuildIndex();
   }
 
   // ── MemoryStore interface ───────────────────────────────────────────────
@@ -177,22 +182,6 @@ export class FileStore implements MemoryStore {
     return path.join(this.storageDir, `${id}.json`);
   }
 
-  private async loadIndex(): Promise<void> {
-    if (!fs.existsSync(this.indexPath)) {
-      // Cold start: scan directory for existing .json files
-      await this.rebuildIndex();
-      return;
-    }
-    try {
-      const raw = fs.readFileSync(this.indexPath, 'utf-8');
-      const data = JSON.parse(raw) as Record<string, IndexEntry>;
-      this.index = new Map(Object.entries(data));
-    } catch {
-      // Corrupt index: rebuild
-      await this.rebuildIndex();
-    }
-  }
-
   private async rebuildIndex(): Promise<void> {
     this.index.clear();
     try {
@@ -203,7 +192,12 @@ export class FileStore implements MemoryStore {
         try {
           const raw = fs.readFileSync(path.join(this.storageDir, file), 'utf-8');
           const engram = JSON.parse(raw) as Engram;
-          this.index.set(engram.id, toIndexEntry(engram));
+          // Only index objects that actually look like an Engram — unrelated
+          // .json files in the store dir (snapshots, config, etc.) must not
+          // poison the index with an `undefined` key.
+          if (engram && typeof engram.id === 'string' && typeof engram.content === 'string') {
+            this.index.set(engram.id, toIndexEntry(engram));
+          }
         } catch {
           // Skip corrupt files
         }

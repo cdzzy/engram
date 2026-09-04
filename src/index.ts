@@ -59,6 +59,7 @@ export { MemorySpace, MemorySpaceManager } from './memory-space';
 export { VersionManager } from './version-manager';
 export { RecallEngine } from './recall-engine';
 export { MemoryManager } from './memory-manager';
+export type { MemorySnapshot } from './memory-manager';
 export {
   SemanticSearchAdapter,
   OpenAIEmbeddings,

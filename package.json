@@ -1,6 +1,6 @@
 {
   "name": "engram",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "Standardized long-term memory for AI agents — forgetting curve, behavior observer, shared memory spaces, memory versioning, and MCP stdio server",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

@@ -240,6 +240,26 @@ async function cmdSpaces(args: CliArgs): Promise<number> {
   return 0;
 }
 
+async function cmdExport(args: CliArgs): Promise<number> {
+  const file = args.positional[0];
+  if (!file) fail('export requires an output FILE path');
+
+  const { manager } = await createManager(args.storage);
+  const snapshot = await manager.exportSnapshot(file);
+  process.stdout.write(`Exported ${snapshot.count} memories to ${file}\n`);
+  return 0;
+}
+
+async function cmdImport(args: CliArgs): Promise<number> {
+  const file = args.positional[0];
+  if (!file) fail('import requires a snapshot FILE path');
+
+  const { manager } = await createManager(args.storage);
+  const result = await manager.importSnapshot(file, { overwrite: args.yes });
+  process.stdout.write(`Imported ${result.imported}, skipped ${result.skipped} (existing ids kept; use --yes to overwrite)\n`);
+  return 0;
+}
+
 function cmdHelp(): number {
   process.stdout.write(`engram — agent memory inspection
 
@@ -250,11 +270,13 @@ Usage:
   engram show     ID [--storage DIR]                 full memory detail
   engram forget   ID [--storage DIR] [--yes]         permanently delete
   engram spaces   [--storage DIR]                    list memory spaces
+  engram export   FILE [--storage DIR]               lossless snapshot to JSON
+  engram import   FILE [--storage DIR] [--yes]       restore from snapshot
 
 Options:
   --storage DIR   FileStore directory (default: ~/.engram)
   --limit N       max results (default: 20)
-  --yes           skip confirmation for destructive commands
+  --yes           skip confirmation / overwrite on import
 `);
   return 0;
 }
@@ -268,6 +290,8 @@ export async function main(argv: string[] = process.argv): Promise<number> {
     case 'show': return cmdShow(args);
     case 'forget': return cmdForget(args);
     case 'spaces': return cmdSpaces(args);
+    case 'export': return cmdExport(args);
+    case 'import': return cmdImport(args);
     case 'help': case '--help': case '-h': return cmdHelp();
     default:
       fail(`unknown command: ${args.command} (see 'engram help')`);

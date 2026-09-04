@@ -333,5 +333,89 @@ export class MemoryManager {
 
     return { total, active, decayed, compressed, archived, superseded, forgotten };
   }
+
+  // ── Snapshot Export / Import ─────────────────────────────────────────────
+
+  /**
+   * Export the full memory store as a lossless snapshot.
+   *
+   * Preserves ids, timestamps, strength, version lineage, and embeddings so
+   * a round-trip (export → clear → import) restores the store exactly.
+   *
+   * Args:
+   *   filePath: Optional path — when given, the snapshot is written to disk
+   *             as pretty-printed JSON.
+   */
+  async exportSnapshot(filePath?: string): Promise<MemorySnapshot> {
+    const memories = await this.store.query({});
+    const snapshot: MemorySnapshot = {
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      count: memories.length,
+      memories: structuredClone(memories),
+    };
+    if (filePath) {
+      const fs = await import('node:fs');
+      fs.writeFileSync(filePath, JSON.stringify(snapshot, null, 2), 'utf-8');
+    }
+    return snapshot;
+  }
+
+  /**
+   * Import memories from a snapshot (object or JSON file path).
+   *
+   * Full-fidelity restore: memories are written to the store as-is rather
+   * than re-created, so ids, decay state, and version lineage survive.
+   *
+   * Args:
+   *   source: A MemorySnapshot object, or a path to a snapshot JSON file.
+   *   options.overwrite: Overwrite existing memories with the same id
+   *                      (default: skip duplicates).
+   *
+   * Returns:
+   *   Counts of imported and skipped memories.
+   */
+  async importSnapshot(
+    source: string | MemorySnapshot,
+    options: { overwrite?: boolean } = {},
+  ): Promise<{ imported: number; skipped: number }> {
+    let snapshot: MemorySnapshot;
+    if (typeof source === 'string') {
+      const fs = await import('node:fs');
+      snapshot = JSON.parse(fs.readFileSync(source, 'utf-8')) as MemorySnapshot;
+    } else {
+      snapshot = source;
+    }
+    if (!snapshot || !Array.isArray(snapshot.memories)) {
+      throw new Error('Invalid snapshot: expected an object with a "memories" array');
+    }
+
+    let imported = 0;
+    let skipped = 0;
+    for (const memory of snapshot.memories) {
+      if (!memory || typeof memory.id !== 'string') {
+        skipped++;
+        continue;
+      }
+      if (!options.overwrite) {
+        const existing = await this.store.get(memory.id);
+        if (existing) {
+          skipped++;
+          continue;
+        }
+      }
+      await this.store.put(memory as Engram);
+      imported++;
+    }
+    return { imported, skipped };
+  }
+}
+
+/** Lossless, versioned snapshot of a memory store. */
+export interface MemorySnapshot {
+  version: number;
+  exportedAt: string;
+  count: number;
+  memories: Engram[];
 }
 

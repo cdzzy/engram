@@ -2,6 +2,16 @@
 
 All notable changes to Engram are documented in this file.
 
+## [0.7.0] - 2026-08-27
+
+### Added
+
+- **Memory snapshot export/import**: `MemoryManager.exportSnapshot(filePath?)` / `importSnapshot(source, { overwrite })` for lossless full-store round-trips (ids, decay state, version lineage, embeddings preserved). Exposed as `engram export FILE` / `engram import FILE [--yes]` CLI commands.
+
+### Fixed
+
+- **FileStore stale-index race**: `init()` now always rebuilds the index from the memory files on disk instead of trusting a cached `_index.json`, which could be up to 500ms stale (debounced flush) — a second process reading the store right after a write saw empty results. Also hardened `rebuildIndex` to skip non-Engram JSON files (snapshots, configs) that previously poisoned the index with an `undefined` key.
+
 ## [0.6.0] - 2026-08-19
 
 ### Added
