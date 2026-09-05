@@ -1,5 +1,8 @@
 # engram 🧠
 
+> Part of the [Agent OS](https://github.com/cdzzy/agent-kernel/blob/main/docs/agent-os.md) suite — kernel · network · memory · policy · audit · testing
+
+
 **Standardized long-term memory for AI agents.**
 
 Like a filesystem for human memory — engram gives your agents persistent, queryable, decay-aware memory that works across sessions.
