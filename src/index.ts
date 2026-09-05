@@ -70,6 +70,10 @@ export type {
   SemanticSearchOptions,
 } from './semantic-search';
 
+// OpenClaw `.agent/` compatibility
+export { importAgentDir, exportToAgentDir } from './openclaw-adapter.js';
+export type { AgentDirImportResult } from './openclaw-adapter.js';
+
 // LLM importance auto-scorer
 export { LLMImportanceScorer } from './importance-scorer';
 export type { LLMImportanceScorerConfig } from './importance-scorer';

@@ -302,7 +302,7 @@ Exposed MCP tools:
 - [x] **Memory snapshot export/import** (`exportSnapshot` / `importSnapshot` + `engram export` / `engram import` CLI) ✅ (v0.7.0)
 - [ ] `engram` CLI for memory inspection
 - [ ] React hook: `useAgentMemory()`
-- [ ] OpenClaw `.agent/memory` format compatibility layer
+- [x] **OpenClaw `.agent/` compatibility** (import/export with `.agent/memory` directory layout) ✅ (v0.8.0)
 
 ---
 

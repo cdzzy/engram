@@ -2,6 +2,12 @@
 
 All notable changes to Engram are documented in this file.
 
+## [0.8.0] - 2026-09-04
+
+### Added
+
+- **OpenClaw `.agent/` compatibility** (last roadmap item): `importAgentDir` pulls `memory/semantic/lessons.jsonl` + `memory/episodic/*.json` into a MemoryManager; `exportToAgentDir` writes semantic memories back as lessons.jsonl + LESSONS.md and episodic memories as individual .json files.
+
 ## [0.7.0] - 2026-08-27
 
 ### Added
