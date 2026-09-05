@@ -1,6 +1,7 @@
 # engram 🧠
 
 > Part of the [Agent OS](https://github.com/cdzzy/agent-kernel/blob/main/docs/agent-os.md) suite — kernel · network · memory · policy · audit · testing
+[![npm](https://img.shields.io/npm/v/@cdzzy%2Fengram?color=red)](https://www.npmjs.com/package/@cdzzy/engram)
 
 
 **Standardized long-term memory for AI agents.**

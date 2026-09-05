@@ -1,7 +1,7 @@
 {
-  "name": "engram",
+  "name": "@cdzzy/engram",
   "version": "0.8.0",
-  "description": "Standardized long-term memory for AI agents —forgetting curve, behavior observer, shared memory spaces, memory versioning, and MCP stdio server",
+  "description": "Standardized long-term memory for AI agents \u9225\u6506orgetting curve, behavior observer, shared memory spaces, memory versioning, and MCP stdio server",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
