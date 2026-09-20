@@ -11,6 +11,7 @@ Like a filesystem for human memory — engram gives your agents persistent, quer
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-blue)](tsconfig.json)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Tests](https://img.shields.io/badge/tests-passing-brightgreen)](tests/)
+[![CI](https://github.com/cdzzy/engram/actions/workflows/ci.yml/badge.svg)](https://github.com/cdzzy/engram/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/badge/npm-engram-red)](https://www.npmjs.com/package/engram)
 
 ---
@@ -35,6 +36,9 @@ Every LLM context window is ephemeral. Close the session, and the agent forgets 
 - ⚖️ **Conflict resolution** — `last-writer-wins` / `merge` / `version` / custom policies for shared namespaces (Issue #3)
 - 🕸️ **GraphRAG memory** — entity/relation extraction with multi-hop traversal (Issue #5)
 - 🔐 **Encryption at rest** — AES-256-GCM transparent content encryption (Issue #8)
+- 🗑️ **Soft delete & purge** — `delete()` marks (status transition), `undelete()` restores, `purge()` physically removes
+- ⏲️ **Expiration dates** — `expiration_date` metadata with lazy expiry on read (no timers)
+- 📉 **Time-decayed recall** — configurable exponential/power decay factor with half-life
 - 💾 **Pluggable storage** — in-memory (default), **FileStore (new: filesystem persistence, zero deps)**, SQLite, PostgreSQL adapters
 - 🔌 **MCP Server** — expose memory as MCP tools, callable from Claude Code, Cursor, Cline
 - 🎯 **Zero dependencies** — core library uses only Node.js built-ins
@@ -213,6 +217,69 @@ const manager = new MemoryManager({}, new SQLiteStore(db));
 
 ---
 
+## Soft Decay (soft delete, expiry & time-decayed recall)
+
+Deletion is now a status transition, not data loss. Memory statuses:
+`active | decayed | compressed | archived | superseded | forgotten | expired`.
+
+### Soft delete / restore / purge
+
+`delete()` no longer removes data. It marks the memory with
+`status: 'archived'` plus a `deletedAt` metadata timestamp. Soft-deleted
+memories disappear from recall but stay recoverable until `purge()`:
+
+```typescript
+await memory.delete(id);      // soft delete → status 'archived', marked with deletedAt
+await memory.get(id);         // still readable (status 'archived')
+await memory.undelete(id);    // restore → status 'active', marker removed
+await memory.purge(id);       // physical removal — the only irreversible API
+```
+
+Soft-deleted memories are excluded from `query()` results, never
+reinforced by reads, and never touched by the decay sweep — they survive
+until explicitly purged.
+
+### Expiration dates (`expiration_date`)
+
+Attach an `expiration_date` metadata field (ISO string or epoch
+milliseconds). Expiry is lazy: the first `get()` / `query()` past the
+deadline transitions the memory to `status: 'expired'` — no timers, no
+background jobs:
+
+```typescript
+await memory.encode({
+  content: 'session token cached',
+  type: 'episodic',
+  source: 'agent-1',
+  metadata: { expiration_date: new Date(Date.now() + 3_600_000).toISOString() },
+});
+```
+
+Only `active` / `decayed` / `compressed` memories can expire — terminal
+statuses and soft-deleted memories are left untouched.
+
+### Time-decayed recall scores
+
+Recall scores can be multiplied by a configurable decay factor based on
+memory age (time since `createdAt`), with a configurable half-life. Two
+forms are supported; both evaluate to 0.5 at the half-life:
+
+```typescript
+const memory = new MemoryManager({
+  recallTimeDecay: { type: 'exponential', halfLife: 86_400_000 }, // 0.5^(age / halfLife)
+  // or { type: 'power', halfLife: 86_400_000 }                   // 1 / (1 + age / halfLife)
+});
+```
+
+Omit `recallTimeDecay` for the previous behavior (no extra factor).
+
+### Encryption keeps working
+
+AES-256-GCM encryption is status-agnostic: archived and expired
+memories stay encrypted at rest and decrypt transparently on read.
+
+---
+
 ## GraphRAG Memory (multi-hop retrieval)
 
 Traverse relationships between entities to answer multi-hop questions:
@@ -307,6 +374,7 @@ Exposed MCP tools:
 - [ ] `engram` CLI for memory inspection
 - [ ] React hook: `useAgentMemory()`
 - [x] **OpenClaw `.agent/` compatibility** (import/export with `.agent/memory` directory layout) ✅ (v0.8.0)
+- [x] **Soft decay** (soft delete / undelete / purge, lazy `expiration_date` expiry, time-decayed recall) ✅ (v0.8.0)
 
 ---
 

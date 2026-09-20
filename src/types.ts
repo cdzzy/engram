@@ -15,7 +15,8 @@ export type MemoryStatus =
   | 'compressed'
   | 'archived'
   | 'superseded'
-  | 'forgotten';
+  | 'forgotten'
+  | 'expired';
 
 /** Permission levels for shared memory spaces */
 export type Permission = 'read' | 'write' | 'admin';
@@ -29,6 +30,18 @@ export const IMPORTANCE_WEIGHTS: Record<ImportanceLevel, number> = {
   low: 0.3,
   trivial: 0.1,
 };
+
+// ─── Metadata Keys ───────────────────────────────────────────────────────────
+
+/** Metadata key set by MemoryManager.delete() — ISO timestamp of the soft delete. */
+export const SOFT_DELETE_MARKER = 'deletedAt';
+
+/**
+ * Metadata key for lazy expiration. Accepts an ISO 8601 string or an
+ * epoch-milliseconds number. When the read time passes this value,
+ * MemoryManager lazily transitions the memory to status 'expired'.
+ */
+export const EXPIRATION_DATE_KEY = 'expiration_date';
 
 // ─── Core Memory Unit ────────────────────────────────────────────────────────
 
@@ -107,6 +120,25 @@ export const DEFAULT_DECAY_CONFIG: DecayConfig = {
   archiveThreshold: 0.1,
   forgetThreshold: 0.02,
 };
+
+// ─── Recall Time-Decay Factor ────────────────────────────────────────────────
+
+/**
+ * Configurable time-decay factor multiplied into recall scores.
+ *
+ * The final recall score is multiplied by f(age), where age = now - createdAt:
+ * - 'exponential': f(t) = 0.5 ^ (t / halfLife)    — fast initial drop, long tail
+ * - 'power':       f(t) = 1 / (1 + t / halfLife)  — power law, heavier tail
+ *
+ * Both forms evaluate to exactly 0.5 at t = halfLife.
+ * `halfLife` is in milliseconds, consistent with DecayConfig.baseHalfLife.
+ * When this config is omitted, recall scores are not modified.
+ */
+export interface RecallTimeDecayConfig {
+  type: 'exponential' | 'power';
+  /** Half-life in milliseconds: the age at which the factor reaches 0.5 */
+  halfLife: number;
+}
 
 // ─── Memory Space ────────────────────────────────────────────────────────────
 
@@ -228,6 +260,10 @@ export interface MemoryEvents {
   'memory:compressed': [result: CompressionResult];
   'memory:archived': [engram: Engram];
   'memory:forgotten': [engram: Engram];
+  'memory:soft-deleted': [engram: Engram];
+  'memory:soft-restored': [engram: Engram];
+  'memory:expired': [engram: Engram];
+  'memory:purged': [engramId: string];
   'memory:superseded': [oldEngram: Engram, newEngram: Engram];
   'memory:version-created': [record: VersionRecord];
   'memory:conflict': [engramId: string, agents: string[]];
@@ -284,6 +320,8 @@ export type ConflictResolver = (
 
 export interface MemoryManagerConfig {
   decay?: Partial<DecayConfig>;
+  /** Optional time-decay factor multiplied into recall scores (default: disabled) */
+  recallTimeDecay?: RecallTimeDecayConfig;
   /** Default namespace for memories */
   defaultNamespace?: string;
   /** Global memory capacity (0 = unlimited) */

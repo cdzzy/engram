@@ -4,10 +4,28 @@ import type {
   RecallQuery,
   RecallResult,
   RecallSignals,
+  RecallTimeDecayConfig,
   TypedEmitter,
 } from './types';
 import { IMPORTANCE_WEIGHTS } from './types';
 import { DecayEngine } from './decay-engine';
+
+/**
+ * Compute the time-decay factor for a memory of a given age.
+ *
+ * - 'exponential': f(t) = 0.5 ^ (t / halfLife)
+ * - 'power':       f(t) = 1 / (1 + t / halfLife)
+ *
+ * Both forms return exactly 0.5 at t = halfLife. A non-positive age yields 1.
+ */
+export function computeTimeDecayFactor(ageMs: number, config: RecallTimeDecayConfig): number {
+  if (!(config.halfLife > 0)) return 1;
+  const age = Math.max(0, ageMs);
+  if (config.type === 'power') {
+    return 1 / (1 + age / config.halfLife);
+  }
+  return Math.pow(0.5, age / config.halfLife);
+}
 
 /**
  * Multi-signal recall engine.
@@ -19,16 +37,37 @@ import { DecayEngine } from './decay-engine';
  *   4. Importance — declared importance level
  *
  * Each signal produces a score in [0, 1], combined via weighted sum.
+ *
+ * An optional RecallTimeDecayConfig multiplies the final score by a
+ * configurable time-decay factor based on memory age (now - createdAt),
+ * so that old memories gradually rank lower even when regularly reinforced.
  */
 export class RecallEngine {
   private store: MemoryStore;
   private decay: DecayEngine;
   private emitter: TypedEmitter;
+  private timeDecay: RecallTimeDecayConfig | undefined;
 
-  constructor(store: MemoryStore, decay: DecayEngine, emitter: TypedEmitter) {
+  constructor(
+    store: MemoryStore,
+    decay: DecayEngine,
+    emitter: TypedEmitter,
+    timeDecay?: RecallTimeDecayConfig,
+  ) {
+    if (timeDecay !== undefined) {
+      if (timeDecay.type !== 'exponential' && timeDecay.type !== 'power') {
+        throw new Error(
+          `Invalid recallTimeDecay.type '${String(timeDecay.type)}': expected 'exponential' or 'power'`,
+        );
+      }
+      if (!(timeDecay.halfLife > 0)) {
+        throw new Error('recallTimeDecay.halfLife must be a positive number (milliseconds)');
+      }
+    }
     this.store = store;
     this.decay = decay;
     this.emitter = emitter;
+    this.timeDecay = timeDecay;
   }
 
   async recall(query: RecallQuery): Promise<RecallResult[]> {
@@ -69,11 +108,17 @@ export class RecallEngine {
     const scored: RecallResult[] = candidates.map(engram => {
       const signals = this.computeSignals(engram, now, text, minTime, timeRange);
 
-      const score =
+      let score =
         signals.recency * recencyBias +
         signals.strength * strengthBias +
         signals.relevance * relevanceBias +
         signals.importance * importanceBias;
+
+      // Optional configurable time-decay factor (based on memory age)
+      if (this.timeDecay) {
+        const ageMs = Math.max(0, now - engram.createdAt);
+        score *= computeTimeDecayFactor(ageMs, this.timeDecay);
+      }
 
       return { engram, score, signals };
     });

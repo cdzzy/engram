@@ -2,6 +2,7 @@ import type {
   Engram,
   MemoryManagerConfig,
   MemorySpaceConfig,
+  MemoryStatus,
   RecallQuery,
   RecallResult,
   CompressionResult,
@@ -13,7 +14,12 @@ import type {
   ConflictResolver,
   ImportanceLevel,
 } from './types';
-import { TypedEmitter, DEFAULT_DECAY_CONFIG } from './types';
+import {
+  TypedEmitter,
+  DEFAULT_DECAY_CONFIG,
+  SOFT_DELETE_MARKER,
+  EXPIRATION_DATE_KEY,
+} from './types';
 import { createEngram, CreateEngramOptions } from './engram';
 import { InMemoryStore } from './storage/in-memory';
 import { DecayEngine } from './decay-engine';
@@ -21,6 +27,9 @@ import { Compressor, ConsolidateOptions } from './compressor';
 import { MemorySpaceManager, MemorySpace } from './memory-space';
 import { VersionManager } from './version-manager';
 import { RecallEngine } from './recall-engine';
+
+/** Statuses eligible for lazy expiration on read. */
+const EXPIRATION_ELIGIBLE: readonly MemoryStatus[] = ['active', 'decayed', 'compressed'];
 
 /**
  * MemoryManager — the main entry point for Engram.
@@ -55,6 +64,7 @@ export class MemoryManager {
 
     this.config = {
       decay: decayConfig,
+      recallTimeDecay: config.recallTimeDecay!,
       defaultNamespace: config.defaultNamespace ?? 'default',
       globalCapacity: config.globalCapacity ?? 0,
       decaySweepInterval: config.decaySweepInterval ?? 60_000,
@@ -68,7 +78,7 @@ export class MemoryManager {
     this.compressor = new Compressor(config.compressionStrategy);
     this.spaces = new MemorySpaceManager(this.store, this.emitter);
     this.versions = new VersionManager(this.store, this.emitter);
-    this.recall = new RecallEngine(this.store, this.decay, this.emitter);
+    this.recall = new RecallEngine(this.store, this.decay, this.emitter, config.recallTimeDecay);
   }
 
   // ── Lifecycle ────────────────────────────────────────────────────────────
@@ -145,17 +155,59 @@ export class MemoryManager {
 
   // ── Recall (Retrieve Memories) ───────────────────────────────────────────
 
-  /** Query memories using multi-signal ranking. */
+  /**
+   * Query memories using multi-signal ranking.
+   *
+   * Memories whose `expiration_date` metadata has passed are lazily
+   * transitioned to status 'expired' and excluded from the results.
+   * Reinforcement is applied after that filter, so expired memories are
+   * never strengthened by a read.
+   */
   async query(query: RecallQuery): Promise<RecallResult[]> {
-    return this.recall.recall(query);
-  }
+    const { reinforce = true, ...rest } = query;
 
-  /** Get a specific memory by ID (also reinforces it). */
-  async get(id: string, reinforce: boolean = false): Promise<Engram | null> {
-    const engram = await this.store.get(id);
-    if (!engram) return null;
+    const results = await this.recall.recall({ ...rest, reinforce: false });
+
+    const kept: RecallResult[] = [];
+    for (const result of results) {
+      const engram = await this.expireIfDue(result.engram);
+      if (engram !== result.engram) continue; // lazily transitioned → exclude
+      kept.push(result);
+    }
 
     if (reinforce) {
+      const now = Date.now();
+      for (const result of kept) {
+        const reinforced = this.decay.reinforce(result.engram, now);
+        await this.store.put(reinforced);
+        this.emitter.emit('memory:recalled', reinforced);
+        this.emitter.emit(
+          'memory:strengthened',
+          reinforced,
+          result.engram.strength,
+          reinforced.strength,
+        );
+        result.engram = reinforced;
+      }
+    }
+
+    return kept;
+  }
+
+  /**
+   * Get a specific memory by ID (also reinforces it on request).
+   *
+   * Reads are lazy about expiration: when `expiration_date` metadata has
+   * passed, the memory is transitioned to status 'expired' before being
+   * returned. Expired and soft-deleted memories are never reinforced.
+   */
+  async get(id: string, reinforce: boolean = false): Promise<Engram | null> {
+    let engram = await this.store.get(id);
+    if (!engram) return null;
+
+    engram = await this.expireIfDue(engram);
+
+    if (reinforce && engram.status !== 'expired' && !this.isSoftDeleted(engram)) {
       const reinforced = this.decay.reinforce(engram);
       await this.store.put(reinforced);
       this.emitter.emit('memory:recalled', reinforced);
@@ -163,6 +215,89 @@ export class MemoryManager {
     }
 
     return engram;
+  }
+
+  // ── Soft Delete / Restore / Purge ────────────────────────────────────────
+
+  /**
+   * Soft-delete a memory. Instead of physically removing it, the memory is
+   * marked with status 'archived' plus a `deletedAt` metadata timestamp.
+   * Soft-deleted memories are excluded from recall but remain recoverable
+   * via undelete() until purge() physically removes them.
+   */
+  async delete(id: string): Promise<void> {
+    const engram = await this.store.get(id);
+    if (!engram) throw new Error(`Memory '${id}' not found`);
+
+    const deleted: Engram = {
+      ...engram,
+      status: 'archived',
+      metadata: { ...engram.metadata, [SOFT_DELETE_MARKER]: new Date().toISOString() },
+    };
+    await this.store.put(deleted);
+    this.emitter.emit('memory:soft-deleted', deleted);
+  }
+
+  /**
+   * Recover a soft-deleted memory (only possible before purge()).
+   * Only memories carrying the soft-delete marker are restored; memories
+   * archived by the decay engine are left untouched.
+   */
+  async undelete(id: string): Promise<Engram> {
+    const engram = await this.store.get(id);
+    if (!engram) throw new Error(`Memory '${id}' not found`);
+    if (!this.isSoftDeleted(engram)) {
+      throw new Error(`Memory '${id}' is not soft-deleted`);
+    }
+
+    const metadata = { ...engram.metadata };
+    delete metadata[SOFT_DELETE_MARKER];
+    const restored: Engram = { ...engram, status: 'active', metadata };
+    await this.store.put(restored);
+    this.emitter.emit('memory:soft-restored', restored);
+    return restored;
+  }
+
+  /**
+   * Physically remove a memory from the store. Irreversible — this is the
+   * only manager-level API that actually deletes data (delete() is soft).
+   */
+  async purge(id: string): Promise<void> {
+    const engram = await this.store.get(id);
+    if (!engram) throw new Error(`Memory '${id}' not found`);
+    await this.store.delete(id);
+    this.emitter.emit('memory:purged', id);
+  }
+
+  /** Whether a memory carries the soft-delete marker. */
+  private isSoftDeleted(engram: Engram): boolean {
+    return engram.metadata[SOFT_DELETE_MARKER] !== undefined;
+  }
+
+  /** Parse `expiration_date` metadata (ISO string or epoch ms) → ms, or null. */
+  private getExpirationMs(engram: Engram): number | null {
+    const raw = engram.metadata[EXPIRATION_DATE_KEY];
+    if (raw === undefined || raw === null) return null;
+    const ms = typeof raw === 'number' ? raw : Date.parse(String(raw));
+    return Number.isFinite(ms) ? ms : null;
+  }
+
+  /**
+   * Lazily transition a memory to status 'expired' when its expiration_date
+   * has passed. Only active/decayed/compressed memories transition; already
+   * terminal statuses and soft-deleted memories are left untouched.
+   * Returns the (possibly updated) engram — identity changes iff it expired.
+   */
+  private async expireIfDue(engram: Engram, now: number = Date.now()): Promise<Engram> {
+    if (this.isSoftDeleted(engram)) return engram;
+    const expirationMs = this.getExpirationMs(engram);
+    if (expirationMs === null || now < expirationMs) return engram;
+    if (!EXPIRATION_ELIGIBLE.includes(engram.status)) return engram;
+
+    const expired: Engram = { ...engram, status: 'expired' };
+    await this.store.put(expired);
+    this.emitter.emit('memory:expired', expired);
+    return expired;
   }
 
   // ── Update & Version ─────────────────────────────────────────────────────
@@ -330,8 +465,9 @@ export class MemoryManager {
     const archived = await this.store.count({ ...filter, status: 'archived' });
     const superseded = await this.store.count({ ...filter, status: 'superseded' });
     const forgotten = await this.store.count({ ...filter, status: 'forgotten' });
+    const expired = await this.store.count({ ...filter, status: 'expired' });
 
-    return { total, active, decayed, compressed, archived, superseded, forgotten };
+    return { total, active, decayed, compressed, archived, superseded, forgotten, expired };
   }
 
   // ── Snapshot Export / Import ─────────────────────────────────────────────

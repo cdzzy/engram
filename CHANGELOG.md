@@ -2,6 +2,19 @@
 
 All notable changes to Engram are documented in this file.
 
+## [0.9.0] - 2026-09-20
+
+### Added
+
+- **Soft decay — non-destructive memory lifecycle**: `delete()` now marks a memory soft-deleted (a `deletedAt` marker) instead of destroying it; `undelete()` recovers it, `purge()` is the explicit hard delete (emits the new `memory:purged` event), and soft-deleted memories stay hidden from reads until purged. Encryption remains orthogonal to state.
+- **Lazy expiration**: reads flip memories past their `expiration_date` to the new `expired` status on the way out (`expireIfDue`), so due memories disappear from results without a sweeper process; stats reports them.
+- **Recall time-decay factor**: optional `recallTimeDecay` config (`exponential`: `0.5^(t/halfLife)` or `power`: `1/(1 + t/halfLife)`) down-weights older memories during recall scoring via the exported `computeTimeDecayFactor()` — off by default, zero behavior change for existing stores.
+- **Release automation** (`.github/workflows/release.yml`): npm publish with provenance on `v*` tags, guarded on `NPM_TOKEN`.
+
+### Changed
+
+- CI: test matrix extended to Node 18/20/22 with fail-fast off.
+
 ## [0.8.0] - 2026-09-04
 
 ### Added

@@ -1,0 +1,54 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  publish:
+    name: Publish to npm
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use Node.js 20.x
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          cache: 'npm'
+          registry-url: 'https://registry.npmjs.org'
+
+      # Guard: only proceed when the NPM_TOKEN secret is configured.
+      # (The secrets context is unavailable in step/job `if`, so the check
+      # runs in a shell and exports an output flag consumed below.)
+      - name: Check NPM_TOKEN secret
+        id: token-guard
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ -z "$NPM_TOKEN" ]; then
+            echo "has-token=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::NPM_TOKEN secret is not configured — skipping npm publish."
+          else
+            echo "has-token=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install dependencies
+        if: steps.token-guard.outputs.has-token == 'true'
+        run: npm ci
+
+      - name: Verify (lint + typecheck + test + build)
+        if: steps.token-guard.outputs.has-token == 'true'
+        run: |
+          npm run lint
+          npm run typecheck
+          npm test
+          npm run build
+
+      - name: Publish to npm
+        if: steps.token-guard.outputs.has-token == 'true'
+        run: npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

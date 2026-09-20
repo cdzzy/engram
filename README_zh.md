@@ -7,6 +7,7 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-blue)](tsconfig.json)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Tests](https://img.shields.io/badge/tests-passing-brightgreen)](tests/)
+[![CI](https://github.com/cdzzy/engram/actions/workflows/ci.yml/badge.svg)](https://github.com/cdzzy/engram/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/badge/npm-engram-red)](https://www.npmjs.com/package/engram)
 
 [English](./README.md) | **中文**
@@ -29,6 +30,9 @@
 - 🗜️ **记忆压缩** — 整合旧记忆，节省上下文预算
 - 📦 **记忆空间** — 按智能体/会话/项目隔离的独立命名空间
 - 🔄 **版本控制** — 追踪记忆随时间的演变历程
+- 🗑️ **软删除与物理删除** — `delete()` 标记（状态流转），`undelete()` 恢复，`purge()` 物理删除
+- ⏲️ **到期时间** — `expiration_date` 元数据，读取时惰性判定到期（无需后台任务）
+- 📉 **召回时间衰减** — 可配置的指数/幂衰减因子与半衰期
 - 💾 **可插拔存储** — 内置内存存储（默认）、SQLite、PostgreSQL 适配器
 - 🎯 **零依赖** — 核心库仅使用 TypeScript 标准库
 
@@ -181,6 +185,66 @@ const manager = new MemoryManager({ store: new PostgreSQLStore(pool) });
 
 ---
 
+## 软衰减（软删除、到期与时间衰减召回）
+
+删除不再意味着数据丢失，而是一次状态流转。记忆状态：
+`active | decayed | compressed | archived | superseded | forgotten | expired`。
+
+### 软删除 / 恢复 / 物理删除
+
+`delete()` 不再移除数据，而是将记忆标记为 `status: 'archived'` 并写入
+`deletedAt` 元数据时间戳。软删除的记忆从召回结果中消失，但在 `purge()`
+之前始终可以恢复：
+
+```typescript
+await memory.delete(id);      // 软删除 → status 'archived'，带 deletedAt 标记
+await memory.get(id);         // 仍可读取（status 'archived'）
+await memory.undelete(id);    // 恢复 → status 'active'，移除标记
+await memory.purge(id);       // 物理删除 —— 唯一不可逆的 API
+```
+
+软删除的记忆不会出现在 `query()` 结果中，也不会被读取强化；衰减清扫同样
+不会触碰它们，直到显式 `purge()` 为止。
+
+### 到期时间（expiration_date）
+
+在元数据中附加 `expiration_date`（ISO 字符串或毫秒时间戳）。到期判定是
+惰性的：`get()` / `query()` 在截止时间之后第一次触达该记忆时，自动将其
+流转为 `status: 'expired'` —— 无需定时器或后台任务：
+
+```typescript
+await memory.encode({
+  content: '会话令牌缓存',
+  type: 'episodic',
+  source: 'agent-1',
+  metadata: { expiration_date: new Date(Date.now() + 3_600_000).toISOString() },
+});
+```
+
+只有 `active` / `decayed` / `compressed` 状态的记忆会到期；终态与软删除的
+记忆不受影响。
+
+### 召回时间衰减因子
+
+召回打分可乘以基于记忆年龄（自 `createdAt` 起）的可配置衰减因子，半衰期
+参数可配。支持两种形式，均在半衰期处等于 0.5：
+
+```typescript
+const memory = new MemoryManager({
+  recallTimeDecay: { type: 'exponential', halfLife: 86_400_000 }, // 指数：0.5^(age / 半衰期)
+  // 或 { type: 'power', halfLife: 86_400_000 }                   // 幂：1 / (1 + age / 半衰期)
+});
+```
+
+不配置 `recallTimeDecay` 时保持原有行为（不乘额外因子）。
+
+### 加密依然生效
+
+AES-256-GCM 加密与状态无关：archived / expired 状态的记忆在磁盘上保持
+加密，读取时透明解密。
+
+---
+
 ## 对比同类方案
 
 | 功能 | Engram | LangChain Memory | Mem0 | 原始向量库 |
@@ -202,6 +266,7 @@ const manager = new MemoryManager({ store: new PostgreSQLStore(pool) });
 - [ ] 记忆快照导出/导入
 - [ ] `engram` CLI 用于记忆检查与管理
 - [ ] React Hook：`useAgentMemory()`
+- [x] **软衰减**（软删除/恢复/物理删除、`expiration_date` 惰性到期、召回时间衰减因子）✅ (v0.8.0)
 
 ---
 

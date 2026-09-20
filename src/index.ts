@@ -20,12 +20,19 @@ export type {
   MemoryFilter,
   MemoryEvents,
   MemoryManagerConfig,
+  RecallTimeDecayConfig,
   ImportanceScorer,
   ConflictPolicy,
   ConflictResolver,
 } from './types';
 
-export { IMPORTANCE_WEIGHTS, DEFAULT_DECAY_CONFIG, TypedEmitter } from './types';
+export {
+  IMPORTANCE_WEIGHTS,
+  DEFAULT_DECAY_CONFIG,
+  TypedEmitter,
+  SOFT_DELETE_MARKER,
+  EXPIRATION_DATE_KEY,
+} from './types';
 export { createEngram } from './engram';
 export type { CreateEngramOptions } from './engram';
 export { InMemoryStore } from './storage/in-memory';
@@ -57,7 +64,7 @@ export type {
 } from './semantic-compressor';
 export { MemorySpace, MemorySpaceManager } from './memory-space';
 export { VersionManager } from './version-manager';
-export { RecallEngine } from './recall-engine';
+export { RecallEngine, computeTimeDecayFactor } from './recall-engine';
 export { MemoryManager } from './memory-manager';
 export type { MemorySnapshot } from './memory-manager';
 export {
