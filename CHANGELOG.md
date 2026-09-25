@@ -2,6 +2,14 @@
 
 All notable changes to Engram are documented in this file.
 
+## [0.9.1] - 2026-09-25
+
+### Changed
+
+- Dev toolchain refreshed: vitest 2.x → 3.2.7 (the old pin pulled a vite/postcss chain carrying a critical advisory), typescript-eslint 8.70.1, tsx 4.23.15, `@types/node` 25.9.8. Coverage is now actually generated (`@vitest/coverage-v8` + `coverage` config), so the CI coverage artifact reflects real numbers.
+- `engines` declared (`node >=18`), matching the CI matrix and sibling packages.
+- Remaining `npm audit` findings are dev-only (vitest mock helper, moderate) with no non-breaking fix — vitest 5 would drop Node 18/20 support in CI — so they are accepted and documented here.
+
 ## [0.9.0] - 2026-09-20
 
 ### Added
