@@ -1,6 +1,6 @@
 {
   "name": "@cdzzy/engram",
-  "version": "0.9.1",
+  "version": "0.9.2",
   "description": "Standardized long-term memory for AI agents — forgetting curve, behavior observer, shared memory spaces, memory versioning, and MCP stdio server",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -39,6 +39,9 @@
   "license": "MIT",
   "engines": {
     "node": ">=18.0.0"
+  },
+  "overrides": {
+    "vite": "^6.3.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.5",

@@ -2,6 +2,12 @@
 
 All notable changes to Engram are documented in this file.
 
+## [0.9.2] - 2026-09-25
+
+### Fixed
+
+- CI on Node 18: vitest 3.x resolves `vite@7` (ESM-only, requires Node ≥20.19), which broke the Node 18 job with `ERR_REQUIRE_ESM`. Pinned `vite` to `^6.3.0` via `overrides` so the whole matrix runs on a Node 18-compatible toolchain.
+
 ## [0.9.1] - 2026-09-25
 
 ### Changed
