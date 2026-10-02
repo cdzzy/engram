@@ -2,6 +2,18 @@
 
 All notable changes to Engram are documented in this file.
 
+## [Unreleased]
+
+### Fixed
+
+- **Semantic search type safety** (`semantic-search.ts`): removed the last two
+  unchecked `as any` casts in the codebase. The `types` filter now routes
+  through a `MemoryType` type guard instead of an unchecked string cast, the
+  `recallScore` metadata boost is read as a finite number or falls back to
+  `0.5` (no more `NaN` propagation into ranking), and `_memoryToText` uses the
+  typed `tags` array plus a narrowed `metadata.summary` read. Behavior is
+  unchanged; the search API surface is untouched.
+
 ## [0.10.0] - 2026-10-02
 
 ### Added

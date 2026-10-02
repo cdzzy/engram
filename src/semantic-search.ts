@@ -24,6 +24,15 @@ export interface SemanticSearchOptions {
   since?: number;
 }
 
+function isMemoryType(value: string | undefined): value is MemoryType {
+  return (
+    value === "episodic" ||
+    value === "semantic" ||
+    value === "procedural" ||
+    value === "working"
+  );
+}
+
 // ─── OpenAI Embeddings ────────────────────────────────────────────────────────
 
 export class OpenAIEmbeddings implements EmbeddingProvider {
@@ -119,7 +128,7 @@ export class SemanticSearchAdapter {
     const candidates = await this.memory.query({
       text: query,
       limit: limit * 3,
-      type: types?.[0] as MemoryType | undefined,
+      type: isMemoryType(types?.[0]) ? types![0] : undefined,
       tags,
     });
 
@@ -134,7 +143,8 @@ export class SemanticSearchAdapter {
       const memoryEmbedding = await this.embeddings.embed(text);
       const semanticScore = cosineSimilarity(queryEmbedding, memoryEmbedding);
 
-      const recallBoost = (memory.metadata as any)?.recallScore ?? 0.5;
+      const rawBoost = memory.metadata.recallScore;
+      const recallBoost = typeof rawBoost === "number" && Number.isFinite(rawBoost) ? rawBoost : 0.5;
       const combinedScore = semanticScore * 0.7 + recallBoost * 0.3 * importanceScore;
 
       if (combinedScore >= minScore) {
@@ -161,7 +171,8 @@ export class SemanticSearchAdapter {
   }
 
   private _memoryToText(memory: Engram): string {
-    return [memory.content, (memory as any).tags?.join(" "), (memory as any).metadata?.summary]
+    const summary = typeof memory.metadata.summary === "string" ? memory.metadata.summary : "";
+    return [memory.content, memory.tags.join(" "), summary]
       .filter(Boolean)
       .join(" | ");
   }
