@@ -83,15 +83,25 @@ export class RecallEngine {
       relevanceBias = 0.25,
       importanceBias = 0.15,
       reinforce = true,
+      validAt,
+      includeInvalidated = false,
     } = query;
 
-    // Build filter to narrow candidates
+    // Build filter to narrow candidates.
+    //
+    // Bi-temporal validity (v0.10+): by default only facts valid *now* are
+    // recalled — closed/invalidated facts are excluded. `validAt` turns the
+    // recall into a time-travel query ("what was true at time T?"), and
+    // `includeInvalidated` disables the validity filter entirely. Stores
+    // without bi-temporal support simply ignore the filter (back-compat).
+    const validityAt = validAt ?? (includeInvalidated ? undefined : Date.now());
     const candidates = await this.store.query({
       namespace,
       type,
       tags,
       status: ['active', 'decayed'],
       minStrength,
+      ...(validityAt !== undefined && { validAt: validityAt }),
     });
 
     if (candidates.length === 0) return [];

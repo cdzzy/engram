@@ -10,11 +10,20 @@ export interface CreateEngramOptions {
   namespace?: string;
   metadata?: Record<string, unknown>;
   embedding?: number[] | null;
+  /**
+   * Bi-temporal (optional): stable identity shared by all versions of the
+   * same fact. Set this to enable MemoryManager.updateFact() invalidation.
+   */
+  factId?: string;
+  /** Bi-temporal (optional): epoch ms when the fact became true. */
+  validFrom?: number | null;
+  /** Bi-temporal (optional): epoch ms when the fact stops being true (null = open). */
+  validUntil?: number | null;
 }
 
 export function createEngram(options: CreateEngramOptions): Engram {
   const now = Date.now();
-  return {
+  const engram: Engram = {
     id: randomUUID(),
     content: options.content,
     type: options.type,
@@ -39,5 +48,12 @@ export function createEngram(options: CreateEngramOptions): Engram {
     compressedFrom: [],
     embedding: options.embedding ?? null,
   };
-}
 
+  // Bi-temporal fields are only attached when explicitly requested so that
+  // existing engrams keep their exact shape (backward compatibility).
+  if (options.factId !== undefined) engram.factId = options.factId;
+  if (options.validFrom !== undefined) engram.validFrom = options.validFrom;
+  if (options.validUntil !== undefined) engram.validUntil = options.validUntil;
+
+  return engram;
+}

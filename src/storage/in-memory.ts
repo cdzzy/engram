@@ -73,6 +73,15 @@ export class InMemoryStore implements MemoryStore {
     if (filter.createdAfter !== undefined && engram.createdAt < filter.createdAfter) return false;
     if (filter.createdBefore !== undefined && engram.createdAt > filter.createdBefore) return false;
 
+    // Bi-temporal fact identity
+    if (filter.factId !== undefined && engram.factId !== filter.factId) return false;
+
+    // Bi-temporal validity window: a fact must be open at the given instant
+    if (filter.validAt !== undefined) {
+      if (engram.validFrom != null && filter.validAt < engram.validFrom) return false;
+      if (engram.validUntil != null && filter.validAt >= engram.validUntil) return false;
+    }
+
     return true;
   }
 }

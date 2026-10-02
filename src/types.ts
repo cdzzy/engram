@@ -76,6 +76,22 @@ export interface Engram {
 
   // Optional embedding for semantic recall
   embedding: number[] | null;
+
+  // ─── Bi-Temporal Facts (optional, v0.10+) ────────────────────────────────
+  /**
+   * Optional stable identity shared by all versions of the same fact
+   * (Zep-style). When present, MemoryManager.updateFact() uses it to close
+   * old versions and open new ones.
+   */
+  factId?: string;
+  /** Epoch ms — when the fact became true in the real world (undefined = unknown) */
+  validFrom?: number | null;
+  /**
+   * Epoch ms — when the fact stopped being true (null/undefined = still
+   * valid). Closed facts remain recallable via time-travel queries
+   * (validAt in the past) but are excluded from default recall.
+   */
+  validUntil?: number | null;
 }
 
 // ─── Decay Configuration ─────────────────────────────────────────────────────
@@ -179,6 +195,14 @@ export interface RecallQuery {
   importanceBias?: number;
   /** If true, recalled memories get a strength boost */
   reinforce?: boolean;
+  /**
+   * Bi-temporal time-travel query: only return facts valid at this epoch-ms
+   * instant (validFrom <= validAt < validUntil). Default: "now" — closed
+   * facts are excluded unless includeInvalidated is set.
+   */
+  validAt?: number;
+  /** Include facts whose validity window has already closed (default: false) */
+  includeInvalidated?: boolean;
 }
 
 export interface RecallSignals {
@@ -248,6 +272,13 @@ export interface MemoryFilter {
   maxStrength?: number;
   createdAfter?: number;
   createdBefore?: number;
+  /** Only memories carrying this factId */
+  factId?: string;
+  /**
+   * Bi-temporal validity check: memories with a validity window must be open
+   * at this instant (validFrom <= validAt < validUntil).
+   */
+  validAt?: number;
 }
 
 // ─── Events ──────────────────────────────────────────────────────────────────
@@ -265,6 +296,8 @@ export interface MemoryEvents {
   'memory:expired': [engram: Engram];
   'memory:purged': [engramId: string];
   'memory:superseded': [oldEngram: Engram, newEngram: Engram];
+  /** Bi-temporal: a fact's validity window was closed by updateFact() */
+  'memory:fact-closed': [closedEngram: Engram];
   'memory:version-created': [record: VersionRecord];
   'memory:conflict': [engramId: string, agents: string[]];
   'space:created': [name: string];

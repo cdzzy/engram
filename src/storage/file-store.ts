@@ -237,10 +237,14 @@ interface IndexEntry {
   source: string;
   strength: number;
   createdAt: number;
+  // Bi-temporal fields (optional, v0.10+)
+  factId?: string;
+  validFrom?: number | null;
+  validUntil?: number | null;
 }
 
 function toIndexEntry(e: Engram): IndexEntry {
-  return {
+  const entry: IndexEntry = {
     namespace: e.namespace,
     type: e.type,
     status: e.status,
@@ -249,6 +253,10 @@ function toIndexEntry(e: Engram): IndexEntry {
     strength: e.strength,
     createdAt: e.createdAt,
   };
+  if (e.factId !== undefined) entry.factId = e.factId;
+  if (e.validFrom !== undefined) entry.validFrom = e.validFrom;
+  if (e.validUntil !== undefined) entry.validUntil = e.validUntil;
+  return entry;
 }
 
 function matchesIndexEntry(entry: IndexEntry, filter: MemoryFilter): boolean {
@@ -266,6 +274,11 @@ function matchesIndexEntry(entry: IndexEntry, filter: MemoryFilter): boolean {
   if (filter.maxStrength !== undefined && entry.strength > filter.maxStrength) return false;
   if (filter.createdAfter !== undefined && entry.createdAt < filter.createdAfter) return false;
   if (filter.createdBefore !== undefined && entry.createdAt > filter.createdBefore) return false;
+  if (filter.factId !== undefined && entry.factId !== filter.factId) return false;
+  if (filter.validAt !== undefined) {
+    if (entry.validFrom != null && filter.validAt < entry.validFrom) return false;
+    if (entry.validUntil != null && filter.validAt >= entry.validUntil) return false;
+  }
   return true;
 }
 
@@ -280,6 +293,9 @@ function matchesFilter(engram: Engram, filter: MemoryFilter): boolean {
       source: engram.source,
       strength: engram.strength,
       createdAt: engram.createdAt,
+      ...(engram.factId !== undefined && { factId: engram.factId }),
+      ...(engram.validFrom !== undefined && { validFrom: engram.validFrom }),
+      ...(engram.validUntil !== undefined && { validUntil: engram.validUntil }),
     },
     filter,
   );

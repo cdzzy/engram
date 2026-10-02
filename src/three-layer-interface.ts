@@ -482,7 +482,8 @@ export class ThreeLayerExtension {
     if (sameFact.length > 0) {
       const oldFact = sameFact[0];
       supersededId = oldFact.id;
-      // Mark old fact as superseded
+      // Mark old fact as superseded; bi-temporal: also close its validity
+      // window so time-travel queries (validAt) can still see it in the past.
       await this.manager.store.put({
         ...oldFact,
         status: 'superseded' as const,
@@ -491,9 +492,14 @@ export class ThreeLayerExtension {
           supersededReason: 'reasserted',
           supersededAt: Date.now(),
         },
+        ...(oldFact.validUntil == null && { validUntil: Date.now() }),
       });
     }
 
+    // Bi-temporal lineage: a reasserted fact inherits the factId of its
+    // predecessor (lazily minted from the old engram id) and starts a new
+    // validity window now. First-time facts stay plain (back-compat).
+    const previousFact = sameFact.length > 0 ? sameFact[0] : null;
     const engram = await this.manager.encode({
       content,
       type: 'semantic' as MemoryType,
@@ -509,6 +515,10 @@ export class ThreeLayerExtension {
         factKey,
         supersedes: supersededId,
       },
+      ...(previousFact && {
+        factId: previousFact.factId ?? previousFact.id,
+        validFrom: Date.now(),
+      }),
     });
 
     // Back-fill supersededBy on old record
@@ -536,12 +546,16 @@ export class ThreeLayerExtension {
     const keywords = (args['keywords'] as string[]) ?? [];
     const namespace = (args['namespace'] as string) ?? 'facts';
     const limit = (args['limit'] as number) ?? 20;
+    // Bi-temporal time travel: query "what was true at time asOf?" —
+    // superseded versions that were valid then are included.
+    const asOf = args['asOf'] as number | undefined;
 
-    // Get all active facts in namespace
+    // Get all facts in namespace (time travel widens status to superseded)
     const allFacts = await this.manager.store.query({
       namespace,
       type: 'semantic',
-      status: ['active'],
+      status: asOf !== undefined ? ['active', 'superseded'] : ['active'],
+      ...(asOf !== undefined && { validAt: asOf }),
     });
 
     // Filter to only fact-tagged memories
@@ -575,18 +589,22 @@ export class ThreeLayerExtension {
       .slice(0, limit)
       .map((m) => ({
         id: m.id,
+        factId: m.factId ?? null,
         subject: m.metadata?.['subject'],
         predicate: m.metadata?.['predicate'],
         value: m.metadata?.['value'],
         confidence: m.importance,
         strength: Math.round(m.strength * 100) / 100,
         createdAt: m.createdAt,
+        validFrom: m.validFrom ?? null,
+        validUntil: m.validUntil ?? null,
         supersedes: m.metadata?.['supersedes'] ?? null,
       }));
 
     return toolResult({
       total: results.length,
       namespace,
+      asOf: asOf ?? null,
       facts: results,
     });
   }
@@ -605,6 +623,8 @@ export class ThreeLayerExtension {
     await this.manager.store.put({
       ...existing,
       status: 'superseded' as const,
+      // Bi-temporal: close the validity window at retraction time
+      ...(existing.validUntil == null && { validUntil: Date.now() }),
       metadata: {
         ...existing.metadata,
         retractedAt: Date.now(),
@@ -618,6 +638,7 @@ export class ThreeLayerExtension {
       predicate: existing.metadata?.['predicate'],
       value: existing.metadata?.['value'],
       reason,
+      validUntil: existing.validUntil ?? Date.now(),
       layer: 'fact',
     });
   }

@@ -314,6 +314,80 @@ export class MemoryManager {
   }
 
   /**
+   * Update a bi-temporal fact (Zep-style): close the current version of the
+   * fact (set its `validUntil` to now and emit 'memory:fact-closed'), then
+   * encode a new version that shares the same `factId` with `validFrom = now`.
+   *
+   * The closed version is never deleted — it remains queryable in the past
+   * via `recall({ validAt })` time-travel queries.
+   *
+   * `factOrEngramId` accepts either the stable factId or the engram id of the
+   * current fact version. Plain memories without a factId are lazily upgraded:
+   * their own id becomes the factId on first update.
+   *
+   * Args:
+   *   factOrEngramId: factId (shared identity) or current engram id.
+   *   newContent:     The corrected / updated statement.
+   *   agentId:        Actor performing the update (checked against space ACL).
+   *   asOf:           Optional real-world time when the new fact became true
+   *                   (epoch ms; defaults to now).
+   *
+   * Returns the newly created fact engram.
+   */
+  async updateFact(
+    factOrEngramId: string,
+    newContent: string,
+    agentId: string,
+    asOf?: number,
+  ): Promise<Engram> {
+    const now = Date.now();
+    const validFrom = asOf ?? now;
+
+    // Locate the current version: by factId first (latest validFrom wins),
+    // then fall back to a direct engram id lookup.
+    const versions = await this.store.query({ factId: factOrEngramId });
+    let current =
+      versions.length > 0
+        ? versions.sort(
+            (a, b) => (b.validFrom ?? b.createdAt) - (a.validFrom ?? a.createdAt),
+          )[0]
+        : await this.store.get(factOrEngramId);
+
+    if (current && current.factId && current.factId !== factOrEngramId) {
+      // The id belongs to a different fact — treat as not found.
+      current = null;
+    }
+    if (!current) {
+      throw new Error(`Fact '${factOrEngramId}' not found`);
+    }
+
+    this.spaces.assertPermission(current.namespace, agentId, 'write');
+
+    // Close the current version of the fact (history stays queryable).
+    const closedFactId = current.factId ?? current.id;
+    const closed: Engram = {
+      ...current,
+      factId: closedFactId,
+      validUntil: current.validUntil ?? now,
+    };
+    await this.store.put(closed);
+    this.emitter.emit('memory:fact-closed', closed);
+
+    // Encode the new version sharing the same fact identity.
+    return this.encode({
+      content: newContent,
+      type: current.type,
+      importance: current.importance,
+      tags: [...current.tags],
+      source: agentId,
+      namespace: current.namespace,
+      metadata: { ...current.metadata },
+      factId: closedFactId,
+      validFrom,
+    });
+  }
+
+  /**
    * Resolve a conflict between an existing memory and an incoming write.
    *
    * Applies the configured conflict policy:

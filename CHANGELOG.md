@@ -2,6 +2,21 @@
 
 All notable changes to Engram are documented in this file.
 
+## [0.10.0] - 2026-10-02
+
+### Added
+
+- **Bi-temporal facts (Zep-style)**: semantic facts now carry a stable `factId` (shared across all versions), a `validFrom` (real-world effective time) and a `validUntil` (supersession time, `null` = still valid) alongside the existing system-time fields — enabling "what did we know, and when did we know it" queries. Fields are attached conditionally, so ordinary (non-fact) memories keep their exact previous shape.
+- **`MemoryManager.updateFact()`**: closes the current fact version (`validUntil = now`, emits the new `memory:fact-closed` event) and encodes a replacement under the same `factId` with `validFrom = asOf ?? now`. The factId is minted lazily — the first update promotes the original memory's id to a factId — so existing stores need no migration.
+- **Time-travel recall**: `recall({ validAt })` restricts candidates to facts valid at that instant (`validFrom <= validAt < validUntil`); `recall({ includeInvalidated: true })` lifts the freshness filter entirely. By default recall snaps to the present, so superseded fact versions are excluded without any extra flags.
+- **FileStore bi-temporal filtering**: the on-disk index persists `factId`/`validFrom`/`validUntil` and `query()` supports `factId` (returns the full version lineage) combined with `validAt` (returns only the version valid at that time).
+- **Three-layer fact tools, now time-aware**: `fact_assert` supersedes the previous version and chains the new one via `factId`/`validFrom`; `fact_query` accepts an optional `asOf` timestamp for point-in-time queries (searching both active and superseded versions, reporting `validFrom`/`validUntil`/`asOf` per fact); `fact_retract` closes the fact's `validUntil` window instead of just flipping status, and reports the timestamp.
+- **9 new tests** (`tests/bi-temporal.test.ts`): version chaining, factId stability, time-travel recall, includeInvalidated semantics, FileStore lineage filtering, and the three-layer `asOf`/retract windows.
+
+### Changed
+
+- `recall()` gained the documented `includeInvalidated` flag (default `false`); passing an explicit `validAt` keeps precedence as before, so existing callers see identical behavior.
+
 ## [0.9.2] - 2026-09-25
 
 ### Fixed
