@@ -2,7 +2,27 @@
 
 All notable changes to Engram are documented in this file.
 
-## [Unreleased]
+## [0.11.0] - 2026-10-09
+
+### Changed
+
+- **Node 18 is EOL — minimum supported Node is now 20** (`engines`), matching
+  the CI matrix which now runs on Node 20 / 22 / 24. Node 18 reached
+  end-of-life on 2025-04-30 and the test toolchain (tinypool 2.x) no longer
+  supports it.
+- **Dev toolchain security hardening**: `overrides` force `tinypool@2.1.2`
+  and `source-map-js@1.2.2`, closing three npm advisories in the vitest
+  dependency chain that remain unfixed on vitest 3.x:
+  - `tinypool <=2.1.1` — prototype-pollution-to-RCE via worker options
+    ([GHSA-5gmw-xhrv-c9v3](https://github.com/advisories/GHSA-5gmw-xhrv-c9v3),
+    [GHSA-85c8-ppgw-ccpr](https://github.com/advisories/GHSA-85c8-ppgw-ccpr), critical)
+  - `source-map-js <=1.2.1` — event-loop denial of service
+    ([GHSA-68fv-2mgg-jv7q](https://github.com/advisories/GHSA-68fv-2mgg-jv7q), high)
+  - Verified compatible: all 252 tests pass against tinypool 2.1.2.
+  - Remaining: 3 moderate findings on `@vitest/mocker`
+    ([GHSA-82fw-gwwq-j7x9](https://github.com/advisories/GHSA-82fw-gwwq-j7x9)) are
+    only resolvable by the vitest 5.0 breaking upgrade (requires Node ≥ 22.12);
+    deferred until the matrix moves to Node 22+ only.
 
 ### Fixed
 
