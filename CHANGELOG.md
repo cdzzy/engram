@@ -2,6 +2,38 @@
 
 All notable changes to Engram are documented in this file.
 
+## [0.12.0] - 2026-10-10
+
+### Changed
+
+- **Upgraded vitest 3.2.7 → 5.0.3, resolving the deferred `@vitest/mocker`
+  advisories**
+  ([GHSA-82fw-gwwq-j7x9](https://github.com/advisories/GHSA-82fw-gwwq-j7x9),
+  moderate): dev-server redirect-mock registration lacked `server.fs` allowlist
+  validation. Fixed upstream in vitest 5.0.0; vitest 3.x is unmaintained and
+  will not receive a backport. `npm audit` now reports **0 vulnerabilities**,
+  closing out the deferral documented in 0.11.0.
+- **Minimum supported Node is now 22.12** (`engines`), the floor required by
+  vitest 5 (`^22.12.0 || ^24.0.0 || >=26.0.0`). The CI matrix now runs on
+  Node 22 / 24 / 26 (Node 20 dropped — vitest 5 no longer installs on it).
+- **Added `vite@^8.3.4` as an explicit devDependency**: vitest 5 declares
+  Vite as a required peer (`^6.4.0 || ^7.0.0 || ^8.0.0`) and pairs best with
+  a directly-pinned version. `@vitest/coverage-v8` moves to `5.0.3`
+  (must exactly match the vitest version).
+- **Removed the `overrides` block** (vite `^6.3.0`, tinypool `2.1.2`,
+  source-map-js `1.2.2`): vitest 5 ships a fully patched dependency chain, so
+  the 0.11.0-era pins are obsolete. The lockfile shrinks by ~1,000 lines.
+- **Renamed `vitest.config.ts` → `vitest.config.mts`**: the file uses ESM
+  syntax while the package is CommonJS, which Vite 8 warns will break under
+  the upcoming native `configLoader` default. The `.mts` extension makes the
+  module format explicit.
+
+### Verified
+
+- All 252 tests pass on vitest 5.0.3 (no `vi.mock`/`vi.hoisted` nesting,
+  empty-`toThrow` assertions, or benchmark APIs in the suite — the v5 breaking
+  changes do not apply). Lint, typecheck, and build are green.
+
 ## [0.11.0] - 2026-10-09
 
 ### Changed
