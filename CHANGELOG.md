@@ -2,6 +2,20 @@
 
 All notable changes to Engram are documented in this file.
 
+## [Unreleased]
+
+### Changed
+
+- **Removed non-null assertions (`!`) in `MemoryManager` config resolution**:
+  optional `recallTimeDecay` / `compressionStrategy` / `importanceScorer` /
+  `onConflict` fields are no longer force-claimed as present. Subsystems that
+  accept them apply their own defaults (e.g. `Compressor` falls back to the
+  concatenation strategy) or null-guard before use, so behavior is unchanged.
+  The resolved-config type is now the explicit `ResolvedMemoryManagerConfig`,
+  and the unused `recallTimeDecay` / `compressionStrategy` slots were dropped
+  from the internally stored config (the raw values still flow straight into
+  `RecallEngine` / `Compressor`).
+
 ## [0.12.0] - 2026-10-10
 
 ### Changed

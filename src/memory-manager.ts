@@ -32,6 +32,23 @@ import { RecallEngine } from './recall-engine';
 const EXPIRATION_ELIGIBLE: readonly MemoryStatus[] = ['active', 'decayed', 'compressed'];
 
 /**
+ * Resolved manager configuration.
+ *
+ * Fields that the underlying subsystems can work without (they either
+ * apply their own defaults or are guarded before use) keep their
+ * optionality instead of being forced non-null with `!` assertions.
+ */
+export interface ResolvedMemoryManagerConfig {
+  decay: DecayConfig;
+  defaultNamespace: string;
+  globalCapacity: number;
+  decaySweepInterval: number;
+  importanceScorer?: ImportanceScorer;
+  conflictPolicy: ConflictPolicy;
+  onConflict?: ConflictResolver;
+}
+
+/**
  * MemoryManager — the main entry point for Engram.
  *
  * Orchestrates all subsystems:
@@ -51,7 +68,7 @@ export class MemoryManager {
   readonly recall: RecallEngine;
 
   private sweepTimer: ReturnType<typeof setInterval> | null = null;
-  private config: Required<MemoryManagerConfig>;
+  private config: ResolvedMemoryManagerConfig;
 
   constructor(config: MemoryManagerConfig = {}, store?: MemoryStore) {
     this.emitter = new TypedEmitter();
@@ -64,14 +81,12 @@ export class MemoryManager {
 
     this.config = {
       decay: decayConfig,
-      recallTimeDecay: config.recallTimeDecay!,
       defaultNamespace: config.defaultNamespace ?? 'default',
       globalCapacity: config.globalCapacity ?? 0,
       decaySweepInterval: config.decaySweepInterval ?? 60_000,
-      compressionStrategy: config.compressionStrategy!,
-      importanceScorer: config.importanceScorer!,
+      importanceScorer: config.importanceScorer,
       conflictPolicy: config.conflictPolicy ?? 'last-writer-wins',
-      onConflict: config.onConflict!,
+      onConflict: config.onConflict,
     };
 
     this.decay = new DecayEngine(decayConfig);
@@ -144,7 +159,7 @@ export class MemoryManager {
   }
 
   /** Expose the effective config (for introspection / debugging). */
-  getConfig(): Readonly<Required<MemoryManagerConfig>> {
+  getConfig(): Readonly<ResolvedMemoryManagerConfig> {
     return this.config;
   }
 
