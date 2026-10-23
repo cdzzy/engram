@@ -6,6 +6,9 @@ All notable changes to Engram are documented in this file.
 
 ### Changed
 
+- **CI concurrency guard & least privilege** (`.github/workflows/ci.yml`):
+  push/PR runs now cancel stale in-progress runs for the same ref and the
+  workflow only requests `contents: read`.
 - **Removed non-null assertions (`!`) in `MemoryManager` config resolution**:
   optional `recallTimeDecay` / `compressionStrategy` / `importanceScorer` /
   `onConflict` fields are no longer force-claimed as present. Subsystems that
