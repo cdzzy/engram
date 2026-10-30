@@ -2,7 +2,7 @@
 
 All notable changes to Engram are documented in this file.
 
-## [Unreleased]
+## [0.12.1] - 2026-10-30
 
 ### Changed
 
@@ -18,6 +18,15 @@ All notable changes to Engram are documented in this file.
   and the unused `recallTimeDecay` / `compressionStrategy` slots were dropped
   from the internally stored config (the raw values still flow straight into
   `RecallEngine` / `Compressor`).
+
+### Fixed
+
+- **Release workflow ran on Node 20** (`.github/workflows/release.yml`):
+  `engines` requires Node ≥ 22.12, but the tag-push publish workflow pinned
+  `setup-node` to 20.x. It now runs on Node 22 and validates the tag against
+  `package.json` before publishing (ESM-safe `readFile`, matching
+  traceshield's release guard), so a mis-tagged release is rejected instead
+  of silently publishing the wrong version.
 
 ## [0.12.0] - 2026-10-10
 
