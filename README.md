@@ -280,6 +280,65 @@ memories stay encrypted at rest and decrypt transparently on read.
 
 ---
 
+## Multi-Agent Shared Memory
+
+Memory spaces are namespaced areas with an ACL, so a fleet of agents can share
+what they learn without leaking everything to everyone. Writes and reads are
+both checked against the same ACL.
+
+```typescript
+import { MemoryManager } from 'engram';
+
+const manager = new MemoryManager();
+
+// Create a cross-agent space; the owner gets 'admin' so it can delegate.
+manager.createSharedSpace('team', 'researcher');
+
+manager.grantAccess('team', 'writer', ['read', 'write']);
+manager.grantAccess('team', 'auditor', ['read']);
+
+// Writes are checked against the space ACL (agent id = `source`).
+await manager.encode({
+  content: 'Q3 revenue grew 18%',
+  type: 'semantic',
+  source: 'writer',      // holds 'write' on 'team'
+  namespace: 'team',
+});
+
+// Scoped reads only return spaces the agent may read.
+const visible = await manager.queryAs('auditor');     // 'team' + 'default'
+const hidden = await manager.queryAs('outsider');     // 'default' only
+
+// Unscoped reads keep the previous behaviour (no agent filtering).
+const all = await manager.query({ namespace: 'team' });
+
+manager.revokeAccess('team', 'auditor');
+```
+
+**What you get**
+
+- `createSharedSpace(name, ownerAgentId)` — creates a `shared` space with the
+  owner as `admin`, unlimited capacity by default.
+- `grantAccess` / `revokeAccess` / `getAccessList` / `getSpaceAgents` /
+  `canAccess` — ACL management, each emitting `space:access-granted` /
+  `space:access-revoked` events.
+- **Read isolation** — `query({ agentId })` and `get(id, reinforce, agentId)`
+  (or the `queryAs` / `getAs` shorthands) filter results to namespaces the
+  agent holds `read` on. A namespace-explicit query for an unreadable space
+  short-circuits to `[]` without touching the store. The `default` namespace
+  stays open to every agent.
+- **Write isolation** — `encode()` already enforces `write` on the target
+  namespace, so a space cannot be polluted by agents without write access.
+- **Capacity & conflict signals** — `space:capacity-warning` fires at 90%
+  occupancy and `memory:conflict` fires when two agents write the same engram
+  inside the conflict window.
+- `listSharedSpaces()` / `listAgentSpaces(agentId)` for discovery.
+
+Omitting `agentId` keeps every call fully backward compatible: existing
+single-agent code is unaffected and pays no extra cost.
+
+---
+
 ## GraphRAG Memory (multi-hop retrieval)
 
 Traverse relationships between entities to answer multi-hop questions:

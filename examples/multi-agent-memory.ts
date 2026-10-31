@@ -127,9 +127,9 @@ async function main() {
 
   // ── 4. Writer queries shared memory ──────────────────────────────────────
 
-  console.log('\n=== Phase 3: Writer queries memory ===');
+  console.log('\n=== Phase 3: Writer queries memory (agent-scoped read) ===');
 
-  const aiResults = await mm.query({
+  const aiResults = await mm.queryAs('writer', {
     text: 'AI model releases',
     namespace: 'team-kb',
     limit: 5,
@@ -144,6 +144,11 @@ async function main() {
   for (const r of aiResults) {
     console.log(`    [score=${r.score.toFixed(3)}] ${r.engram.content.slice(0, 60)}...`);
   }
+
+  // Read isolation: an agent with no ACL entry cannot see the space at all,
+  // even though the memories physically exist in the same store.
+  const outsiderResults = await mm.queryAs('outsider', { namespace: 'team-kb' });
+  console.log(`  Outsider sees ${outsiderResults.length} memories from team-kb (expected 0)`);
 
   // Writer tries to write (should fail — read-only)
   try {

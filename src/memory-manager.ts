@@ -3,6 +3,7 @@ import type {
   MemoryManagerConfig,
   MemorySpaceConfig,
   MemoryStatus,
+  Permission,
   RecallQuery,
   RecallResult,
   CompressionResult,
@@ -179,12 +180,27 @@ export class MemoryManager {
    * never strengthened by a read.
    */
   async query(query: RecallQuery): Promise<RecallResult[]> {
-    const { reinforce = true, ...rest } = query;
+    const { reinforce = true, agentId, ...rest } = query;
+
+    // Multi-agent isolation: a scoped query never sees spaces it cannot read.
+    // A namespace-explicit query short-circuits to [] rather than reading and
+    // discarding, so unauthorised lookups cost nothing.
+    if (
+      agentId !== undefined &&
+      rest.namespace !== undefined &&
+      !this.spaces.can(rest.namespace, agentId, 'read')
+    ) {
+      return [];
+    }
 
     const results = await this.recall.recall({ ...rest, reinforce: false });
 
+    const readable =
+      agentId === undefined ? null : this.spaces.getReadableNamespaces(agentId);
+
     const kept: RecallResult[] = [];
     for (const result of results) {
+      if (readable !== null && !readable.includes(result.engram.namespace)) continue;
       const engram = await this.expireIfDue(result.engram);
       if (engram !== result.engram) continue; // lazily transitioned → exclude
       kept.push(result);
@@ -215,10 +231,18 @@ export class MemoryManager {
    * Reads are lazy about expiration: when `expiration_date` metadata has
    * passed, the memory is transitioned to status 'expired' before being
    * returned. Expired and soft-deleted memories are never reinforced.
+   *
+   * Multi-agent isolation: pass `agentId` to enforce the space ACL — a scoped
+   * read returns null when the agent lacks `read` permission on the memory's
+   * namespace. Omitting it keeps the unscoped pre-existing behaviour.
    */
-  async get(id: string, reinforce: boolean = false): Promise<Engram | null> {
+  async get(id: string, reinforce: boolean = false, agentId?: string): Promise<Engram | null> {
     let engram = await this.store.get(id);
     if (!engram) return null;
+
+    if (agentId !== undefined && !this.spaces.can(engram.namespace, agentId, 'read')) {
+      return null;
+    }
 
     engram = await this.expireIfDue(engram);
 
@@ -516,6 +540,25 @@ export class MemoryManager {
     return this.spaces.createSpace(config);
   }
 
+  /**
+   * Convenience wrapper for creating a cross-agent shared space: `shared`
+   * defaults to true, capacity to unlimited, and the first agent in the ACL
+   * gets `admin` so it can hand out access to the rest of the fleet.
+   */
+  createSharedSpace(
+    name: string,
+    ownerAgentId: string,
+    options: Partial<Omit<MemorySpaceConfig, 'name' | 'acl'>> = {},
+  ): MemorySpace {
+    return this.createSpace({
+      name,
+      maxCapacity: options.maxCapacity ?? 0,
+      acl: { [ownerAgentId]: ['admin'] },
+      shared: options.shared ?? true,
+      consolidationInterval: options.consolidationInterval ?? 0,
+    });
+  }
+
   /** Get a memory space. */
   getSpace(name: string): MemorySpace | null {
     return this.spaces.getSpace(name);
@@ -524,6 +567,64 @@ export class MemoryManager {
   /** List spaces accessible by an agent. */
   listAgentSpaces(agentId: string): MemorySpace[] {
     return this.spaces.listAgentSpaces(agentId);
+  }
+
+  /** List every space marked `shared` — the cross-agent memory areas. */
+  listSharedSpaces(): MemorySpace[] {
+    return this.spaces.listSpaces().filter((s) => s.isShared());
+  }
+
+  /** Grant permissions on a space to an agent (emits `space:access-granted`). */
+  grantAccess(name: string, agentId: string, permissions: Permission[]): void {
+    const space = this.requireSpace(name);
+    space.grantAccess(agentId, permissions);
+    this.emitter.emit('space:access-granted', name, agentId, space.getAccessList()[agentId]);
+  }
+
+  /** Revoke every permission an agent holds on a space (emits `space:access-revoked`). */
+  revokeAccess(name: string, agentId: string): void {
+    const space = this.requireSpace(name);
+    space.revokeAccess(agentId);
+    this.emitter.emit('space:access-revoked', name, agentId);
+  }
+
+  /** Read the ACL of a space (agentId → permissions). */
+  getAccessList(name: string): Record<string, Permission[]> {
+    return this.requireSpace(name).getAccessList();
+  }
+
+  /** List the agents that can access a space. */
+  getSpaceAgents(name: string): string[] {
+    return this.requireSpace(name).getAgentIds();
+  }
+
+  /** Whether an agent holds `permission` on a space (non-throwing). */
+  canAccess(name: string, agentId: string, permission: Permission = 'read'): boolean {
+    return this.spaces.can(name, agentId, permission);
+  }
+
+  /** Namespaces an agent may read (default plus every space granting `read`). */
+  getReadableNamespaces(agentId: string): string[] {
+    return this.spaces.getReadableNamespaces(agentId);
+  }
+
+  /**
+   * Agent-scoped query — shorthand for `query({ ...rest, agentId })`.
+   * Results are restricted to spaces the agent may read.
+   */
+  queryAs(agentId: string, query: Omit<RecallQuery, 'agentId'> = {}): Promise<RecallResult[]> {
+    return this.query({ ...query, agentId });
+  }
+
+  /** Agent-scoped get — shorthand for `get(id, reinforce, agentId)`. */
+  getAs(agentId: string, id: string, reinforce: boolean = false): Promise<Engram | null> {
+    return this.get(id, reinforce, agentId);
+  }
+
+  private requireSpace(name: string): MemorySpace {
+    const space = this.spaces.getSpace(name);
+    if (!space) throw new Error(`Memory space '${name}' does not exist`);
+    return space;
   }
 
   // ── Decay Management ─────────────────────────────────────────────────────

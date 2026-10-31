@@ -119,6 +119,34 @@ export class MemorySpaceManager {
   }
 
   /**
+   * Non-throwing permission probe — the read-side counterpart of
+   * {@link assertPermission}.
+   *
+   * Returns whether ``agentId`` holds ``permission`` on ``namespace``.
+   * Unregistered namespaces are treated like the built-in ``default`` space:
+   * open, because nothing can be written there without a registered space.
+   */
+  can(namespace: string, agentId: string, permission: Permission): boolean {
+    const space = this.spaces.get(namespace);
+    if (!space) return namespace === 'default';
+    return space.hasPermission(agentId, permission);
+  }
+
+  /**
+   * Namespaces an agent may read: the always-open ``default`` space plus every
+   * registered space whose ACL grants the agent ``read``.
+   */
+  getReadableNamespaces(agentId: string): string[] {
+    const readable = new Set<string>(['default']);
+    for (const space of this.spaces.values()) {
+      if (space.hasPermission(agentId, 'read')) {
+        readable.add(space.name);
+      }
+    }
+    return [...readable];
+  }
+
+  /**
    * Validate that an agent can perform an operation in a namespace.
    * Throws if the agent lacks permission.
    */

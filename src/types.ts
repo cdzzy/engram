@@ -203,6 +203,13 @@ export interface RecallQuery {
   validAt?: number;
   /** Include facts whose validity window has already closed (default: false) */
   includeInvalidated?: boolean;
+  /**
+   * Multi-agent isolation. When set, results are restricted to namespaces this
+   * agent holds `read` permission on — a scoped query cannot see
+   * memory from spaces it has no access to. Omit for unscoped access (the
+   * pre-existing behaviour, which does not filter by agent).
+   */
+  agentId?: string;
 }
 
 export interface RecallSignals {
@@ -302,6 +309,10 @@ export interface MemoryEvents {
   'memory:conflict': [engramId: string, agents: string[]];
   'space:created': [name: string];
   'space:capacity-warning': [name: string, usage: number, capacity: number];
+  /** Multi-agent sharing: an agent was granted permissions on a space */
+  'space:access-granted': [name: string, agentId: string, permissions: Permission[]];
+  /** Multi-agent sharing: all permissions for an agent were revoked */
+  'space:access-revoked': [name: string, agentId: string];
 }
 
 /** Type-safe event emitter for memory events */

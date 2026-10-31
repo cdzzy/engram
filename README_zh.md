@@ -245,6 +245,62 @@ AES-256-GCM 加密与状态无关：archived / expired 状态的记忆在磁盘�
 
 ---
 
+## 多智能体共享记忆
+
+记忆空间（memory space）是带 ACL 的命名空间，让一组智能体共享各自学到的知识，
+而不至于把所有记忆对所有人敞开。写入与读取都走同一套 ACL 校验。
+
+```typescript
+import { MemoryManager } from 'engram';
+
+const manager = new MemoryManager();
+
+// 创建跨智能体空间；创建者拿到 admin，可以继续分授权限
+manager.createSharedSpace('team', 'researcher');
+
+manager.grantAccess('team', 'writer', ['read', 'write']);
+manager.grantAccess('team', 'auditor', ['read']);
+
+// 写入按空间 ACL 校验（智能体 id 即 `source`）
+await manager.encode({
+  content: '第三季度营收增长 18%',
+  type: 'semantic',
+  source: 'writer',      // 在 'team' 上有 write 权限
+  namespace: 'team',
+});
+
+// 带作用域的读取只返回该智能体可读的空间
+const visible = await manager.queryAs('auditor');     // 'team' + 'default'
+const hidden = await manager.queryAs('outsider');     // 只有 'default'
+
+// 不带作用域的读取保持原有行为（不做智能体过滤）
+const all = await manager.query({ namespace: 'team' });
+
+manager.revokeAccess('team', 'auditor');
+```
+
+**能力清单**
+
+- `createSharedSpace(name, ownerAgentId)` —— 创建 `shared` 空间，创建者默认为
+  `admin`，容量默认不限。
+- `grantAccess` / `revokeAccess` / `getAccessList` / `getSpaceAgents` /
+  `canAccess` —— ACL 管理，并分别触发 `space:access-granted` /
+  `space:access-revoked` 事件。
+- **读隔离** —— `query({ agentId })` 与 `get(id, reinforce, agentId)`（或
+  `queryAs` / `getAs` 简写）会把结果过滤到该智能体持有 `read` 权限的命名空间。
+  显式指定不可读命名空间的查询会直接短路返回 `[]`，不触碰存储层。`default`
+  命名空间对所有智能体保持开放。
+- **写隔离** —— `encode()` 早已校验目标命名空间的 `write` 权限，无写权限的
+  智能体无法污染空间。
+- **容量与冲突信号** —— 占用达 90% 触发 `space:capacity-warning`；两个智能体
+  在冲突窗口内写同一条记忆会触发 `memory:conflict`。
+- `listSharedSpaces()` / `listAgentSpaces(agentId)` 用于发现空间。
+
+不传 `agentId` 时所有调用完全向后兼容：既有单智能体代码不受影响，也没有
+额外开销。
+
+---
+
 ## 对比同类方案
 
 | 功能 | Engram | LangChain Memory | Mem0 | 原始向量库 |
@@ -262,7 +318,7 @@ AES-256-GCM 加密与状态无关：archived / expired 状态的记忆在磁盘�
 
 - [ ] 语义搜索适配器（自带 Embedding 模型）
 - [ ] 通过 LLM 裁判自动评估重要性分值
-- [ ] 智能体间共享记忆（多智能体记忆空间）
+- [x] **智能体间共享记忆（多智能体记忆空间）**（`createSharedSpace` + ACL 授权/撤销 + `agentId` 读数隔离）✅ (v0.13.0)
 - [ ] 记忆快照导出/导入
 - [ ] `engram` CLI 用于记忆检查与管理
 - [ ] React Hook：`useAgentMemory()`

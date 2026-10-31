@@ -2,6 +2,43 @@
 
 All notable changes to Engram are documented in this file.
 
+## [0.13.0] - 2026-11-01
+
+### Added
+
+- **Multi-agent shared memory — ACL management on `MemoryManager`**:
+  the space machinery (`MemorySpace` / `MemorySpaceManager`) existed but the
+  main entry point only exposed `createSpace` / `getSpace` / `listAgentSpaces`,
+  so there was no way to actually share a space across a fleet.
+  - `createSharedSpace(name, ownerAgentId, options)` — `shared` defaults to
+    true, capacity to unlimited, and the owner is seeded into the ACL as
+    `admin` so it can delegate.
+  - `grantAccess` / `revokeAccess` / `getAccessList` / `getSpaceAgents` /
+    `canAccess` / `getReadableNamespaces` / `listSharedSpaces`.
+  - New events `space:access-granted` and `space:access-revoked`.
+- **Agent-scoped reads (read isolation)**: previously only *writes* were
+  checked against the space ACL — any agent could `query()` its way into a
+  namespace it had no `read` permission on.
+  - `RecallQuery.agentId` restricts results to namespaces the agent may read.
+  - `get(id, reinforce, agentId)` returns `null` for unreadable namespaces.
+  - `queryAs(agentId, query)` / `getAs(agentId, id)` shorthands.
+  - A namespace-explicit query for an unreadable space short-circuits to `[]`
+    without touching the store. The `default` namespace stays open to all
+    agents.
+  - Omitting `agentId` preserves the previous unscoped behaviour exactly, so
+    existing single-agent code is unaffected.
+- `MemorySpaceManager.can(namespace, agentId, permission)` — non-throwing
+  permission probe, the read-side counterpart of `assertPermission`.
+- `MemorySpaceManager.getReadableNamespaces(agentId)` — `default` plus every
+  registered space granting `read`.
+
+### Changed
+
+- `MemorySpaceManager.assertPermission` is now expressed in terms of the new
+  `can()` probe; behaviour is unchanged.
+- README (both languages) gained a "Multi-Agent Shared Memory" section, and
+  the Chinese roadmap item for multi-agent memory spaces is marked done.
+
 ## [0.12.1] - 2026-10-30
 
 ### Changed
