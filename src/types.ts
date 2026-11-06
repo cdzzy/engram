@@ -92,6 +92,18 @@ export interface Engram {
    * (validAt in the past) but are excluded from default recall.
    */
   validUntil?: number | null;
+
+  // ─── Verifiable memory (optional, v0.14+) ────────────────────────────────
+  /**
+   * Content-bound signature over the memory's immutable identity fields plus
+   * the previous record's digest in its namespace chain. Present only when a
+   * `MemorySigner` is configured on the manager (or `sign()` is called
+   * explicitly); unsigned stores keep the exact shape they had before.
+   *
+   * Typed as `unknown` here to keep `types.ts` free of a runtime import from
+   * `verifiable-memory.ts`; see `MemorySignature` for the concrete shape.
+   */
+  signature?: unknown;
 }
 
 // ─── Decay Configuration ─────────────────────────────────────────────────────
@@ -380,5 +392,10 @@ export interface MemoryManagerConfig {
   conflictPolicy?: ConflictPolicy;
   /** Custom conflict resolver (used when conflictPolicy is 'custom') */
   onConflict?: ConflictResolver;
+  /**
+   * Optional signer — when present, every `encode()` signs the new memory and
+   * `MemoryManager.verify*` becomes available. See `verifiable-memory.ts`.
+   */
+  signer?: unknown;
 }
 

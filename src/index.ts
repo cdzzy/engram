@@ -63,6 +63,22 @@ export type {
   SemanticCompressionOptions,
 } from './semantic-compressor';
 export { MemorySpace, MemorySpaceManager } from './memory-space';
+
+// Verifiable memory — content-bound signatures + tamper-evident chains
+export {
+  MemorySigner,
+  canonicalMemoryPayload,
+  memoryDigest,
+  SIGNED_ENGRAM_FIELDS,
+} from './verifiable-memory';
+export type {
+  SignatureAlgorithm,
+  MemorySignature,
+  MemorySignerConfig,
+  ChainError,
+  ChainErrorType,
+  ChainVerificationResult,
+} from './verifiable-memory';
 export { VersionManager } from './version-manager';
 export { RecallEngine, computeTimeDecayFactor } from './recall-engine';
 export { MemoryManager } from './memory-manager';

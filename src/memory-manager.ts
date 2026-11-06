@@ -28,6 +28,7 @@ import { Compressor, ConsolidateOptions } from './compressor';
 import { MemorySpaceManager, MemorySpace } from './memory-space';
 import { VersionManager } from './version-manager';
 import { RecallEngine } from './recall-engine';
+import type { MemorySigner, MemorySignature, ChainVerificationResult } from './verifiable-memory';
 
 /** Statuses eligible for lazy expiration on read. */
 const EXPIRATION_ELIGIBLE: readonly MemoryStatus[] = ['active', 'decayed', 'compressed'];
@@ -47,6 +48,8 @@ export interface ResolvedMemoryManagerConfig {
   importanceScorer?: ImportanceScorer;
   conflictPolicy: ConflictPolicy;
   onConflict?: ConflictResolver;
+  /** Optional signer — when present, `encode()` signs every new memory. */
+  signer?: MemorySigner;
 }
 
 /**
@@ -88,6 +91,7 @@ export class MemoryManager {
       importanceScorer: config.importanceScorer,
       conflictPolicy: config.conflictPolicy ?? 'last-writer-wins',
       onConflict: config.onConflict,
+      signer: config.signer as MemorySigner | undefined,
     };
 
     this.decay = new DecayEngine(decayConfig);
@@ -147,6 +151,20 @@ export class MemoryManager {
     }
 
     const engram = createEngram(fullOptions);
+
+    // Verifiable memory: sign the record and link it to the previous signed
+    // record in this namespace. Done before put() so the stored bytes and the
+    // signature are consistent from the first write.
+    const signer = this.config.signer;
+    if (signer) {
+      const previous = await this.lastSignedInNamespace(namespace);
+      const signature = signer.sign(
+        engram,
+        previous ? (previous.signature as MemorySignature) : null,
+      );
+      engram.signature = signature;
+    }
+
     await this.store.put(engram);
 
     // Record version
@@ -531,6 +549,95 @@ export class MemoryManager {
   /** Run memory consolidation — compress weak related memories into summaries. */
   async consolidate(options?: ConsolidateOptions): Promise<CompressionResult[]> {
     return this.compressor.consolidate(this.store, this.emitter, options);
+  }
+
+  // ── Verifiable Memory ───────────────────────────────────────────────────
+
+  /**
+   * Tail of a namespace's signature chain — the predecessor for the next write.
+   *
+   * Found by following `prev` pointers from the root instead of sorting by
+   * timestamp: two memories written in the same millisecond have identical
+   * `createdAt` values and random UUIDs, so a time-ordered scan cannot tell
+   * which came last. The pointer is the order.
+   */
+  private async lastSignedInNamespace(namespace: string): Promise<Engram | null> {
+    const rows = await this.store.query({ namespace });
+    const signed = rows.filter((row) => row.signature);
+    if (signed.length === 0) {
+      return null;
+    }
+
+    const signatureOf = (row: Engram): MemorySignature => row.signature as MemorySignature;
+
+    const roots = signed.filter((row) => signatureOf(row).prev === null);
+    if (roots.length === 0) {
+      // Every record claims a predecessor, so no root survived: the chain is
+      // already broken. Fall back to the newest record so writes keep moving;
+      // verifyAll() will report the corruption.
+      return signed.reduce((newest, row) =>
+        signatureOf(row).signedAt >= signatureOf(newest).signedAt ? row : newest,
+      );
+    }
+
+    // Walk from the (single expected) root to its tail.
+    const byPrev = new Map(
+      signed
+        .filter((row) => signatureOf(row).prev !== null)
+        .map((row) => [signatureOf(row).prev as string, row] as const),
+    );
+    let cursor: Engram = roots[0];
+    let guard = 0;
+    while (guard <= signed.length) {
+      const next = byPrev.get(signatureOf(cursor).digest);
+      if (!next) {
+        return cursor;
+      }
+      cursor = next;
+      guard += 1;
+    }
+    return cursor;
+  }
+
+  /**
+   * Verify a single memory against its signature.
+   *
+   * Returns false when the memory is missing or unsigned; throws only when no
+   * signer was configured at all, since that is a setup error rather than a
+   * verification result.
+   */
+  async verifyMemory(id: string): Promise<boolean> {
+    const signer = this.requireSigner();
+    const engram = await this.store.get(id);
+    if (!engram || !engram.signature) {
+      return false;
+    }
+    return signer.verify(engram, engram.signature as MemorySignature);
+  }
+
+  /** Verify one namespace's whole chain (tamper-evident linkage). */
+  async verifyNamespace(namespace: string): Promise<ChainVerificationResult> {
+    const signer = this.requireSigner();
+    const rows = await this.store.query({ namespace });
+    return signer.verifyChain(rows);
+  }
+
+  /** Verify every namespace independently and roll the results up. */
+  async verifyAll(): Promise<ChainVerificationResult> {
+    const signer = this.requireSigner();
+    const rows = await this.store.query({});
+    return signer.verifyChains(rows);
+  }
+
+  private requireSigner(): MemorySigner {
+    const signer = this.config.signer;
+    if (!signer) {
+      throw new Error(
+        'No signer configured. Pass `signer: new MemorySigner({...})` to '
+          + 'MemoryManager to enable verifiable memory.',
+      );
+    }
+    return signer;
   }
 
   // ── Memory Spaces ────────────────────────────────────────────────────────

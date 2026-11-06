@@ -301,6 +301,55 @@ manager.revokeAccess('team', 'auditor');
 
 ---
 
+## 可验证记忆
+
+主流记忆系统（Mem0、Letta、Zep）只存「完整性提示」，不签名：Letta 的
+`version` 是乐观锁，Mem0 的 `hash` 是去重摘要。任何有写权限的人都能改记忆而
+无人能察觉——纯内容哈希也救不了，因为算法公开，改完重算即可。
+
+```typescript
+import { MemoryManager, MemorySigner } from 'engram';
+
+// 非对称：写入方用私钥签名，其他智能体只需公钥即可验证
+const keys = MemorySigner.generateEd25519KeyPair();
+const signer = new MemorySigner({
+  algorithm: 'ed25519',
+  privateKeyPem: keys.privateKeyPem,
+  publicKeyPem: keys.publicKeyPem,
+});
+
+const manager = new MemoryManager({ signer });
+await manager.encode({ content: '第三季度营收增长 18%', type: 'semantic', source: 'analyst' });
+
+await manager.verifyMemory(id);        // 单条校验
+await manager.verifyNamespace('default'); // 整条链审计
+await manager.verifyAll();              // 全部命名空间
+```
+
+**签名覆盖什么、刻意不覆盖什么**
+
+覆盖：`id`、`content`、`type`、`importance`、`source`、`namespace`、`tags`、
+`createdAt`，以及上一条记录的摘要。
+
+不覆盖：`strength`、`stability`、`accessCount`、`lastAccessedAt`、`status`、
+`metadata`、`version`——这些在每次召回、衰减、软删除时都会变，签进去会导致
+记忆第一次被读取后就验证失败。
+
+**链按命名空间划分，顺序由 `prev` 指针定义而非时间**（同一毫秒写入的两条记忆
+`createdAt` 相同、id 是随机 UUID，时间排序无法还原写序）：
+
+| 攻击方式 | 检测结果 |
+|----------|----------|
+| 修改记忆内容 | `signature_invalid` |
+| 把签名搬到另一条记录 | `signature_invalid`（内嵌摘要不匹配） |
+| 删除链中间的记录 | `missing_signature`（后继变孤儿） |
+| 拼接第二条链 | `chain_break` |
+| 重复 id | `duplicate_id` |
+
+单进程场景可改用 HMAC-SHA256（一个共享密钥，比密钥分发更好运维）。
+
+---
+
 ## 对比同类方案
 
 | 功能 | Engram | LangChain Memory | Mem0 | 原始向量库 |
@@ -319,6 +368,7 @@ manager.revokeAccess('team', 'auditor');
 - [ ] 语义搜索适配器（自带 Embedding 模型）
 - [ ] 通过 LLM 裁判自动评估重要性分值
 - [x] **智能体间共享记忆（多智能体记忆空间）**（`createSharedSpace` + ACL 授权/撤销 + `agentId` 读数隔离）✅ (v0.13.0)
+- [x] **可验证记忆**（`MemorySigner`：Ed25519/HMAC 内容绑定签名 + 按命名空间防篡改链）✅ (v0.14.0)
 - [ ] 记忆快照导出/导入
 - [ ] `engram` CLI 用于记忆检查与管理
 - [ ] React Hook：`useAgentMemory()`

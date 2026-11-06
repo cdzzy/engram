@@ -2,6 +2,53 @@
 
 All notable changes to Engram are documented in this file.
 
+## [0.14.0] - 2026-11-06
+
+### Added
+
+- **Verifiable memory** (`src/verifiable-memory.ts`): content-bound signatures
+  and tamper-evident chains. Every mainstream agent-memory system (Mem0,
+  Letta, Zep) stores records with plain integrity hints — Letta's `version` is
+  optimistic locking, Mem0's `hash` is a deduplication digest. None of them
+  *sign* a record, so anyone with store write access can rewrite a memory and
+  no verifier can tell. A content hash cannot close that gap either: the
+  algorithm is public, so it can be recomputed after editing.
+  - `MemorySigner` with two modes: **HMAC-SHA256** (symmetric, one shared
+    secret) and **Ed25519** (asymmetric — a writer signs with its private key
+    and any other agent verifies with only the public key, which is what
+    multi-agent fleets need).
+  - Signed fields are the *immutable identity* of a memory (`id`, `content`,
+    `type`, `importance`, `source`, `namespace`, `tags`, `createdAt`) plus the
+    previous record's digest. Runtime state (`strength`, `accessCount`,
+    `lastAccessedAt`, `status`, `metadata`, `version`) is deliberately
+    excluded: those change on recall/decay/soft-delete, and signing them would
+    invalidate every record after its first read.
+  - Chains are **per namespace** and ordered by `prev` pointers, not
+    timestamps. Two memories written in the same millisecond share a
+    `createdAt` and have random UUIDs, so a time sort cannot recover write
+    order; the pointer is the order, exactly like a blockchain.
+  - `MemorySigner.verifyChain` / `verifyChains` report `signature_invalid`,
+    `missing_signature` (deleted middle record → orphaned successor),
+    `chain_break` (second chain in one namespace, or a cycle), `duplicate_id`,
+    and count unsigned records without failing them.
+  - `MemorySigner.generateEd25519KeyPair()` and `derivePublicKey()` for key
+    management; signatures use constant-time comparison for HMAC values.
+- **Manager integration**: `MemoryManagerConfig.signer` — when set, every
+  `encode()` signs the record and links it to the namespace tail. New
+  `verifyMemory(id)`, `verifyNamespace(name)`, `verifyAll()`. Unsigned stores
+  keep the exact shape and behaviour they had before.
+
+### Testing
+
+- 37 new tests (`tests/verifiable-memory.test.ts`): construction guards, key
+  generation/derivation, canonical payload binding (mutable state excluded),
+  tamper rejection (content edit, copied signature, wrong secret, wrong
+  algorithm, wrong public key), asymmetric sign/verify, chain walking
+  (deletion, tampering, duplicates, orphan links, cycles, namespace
+  independence), and manager integration including "verification still passes
+  after a recall".
+- Full suite: **304 passed**; `tsc --noEmit` and `eslint src` clean.
+
 ## [0.13.0] - 2026-11-01
 
 ### Added

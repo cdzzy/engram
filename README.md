@@ -339,6 +339,64 @@ single-agent code is unaffected and pays no extra cost.
 
 ---
 
+## Verifiable Memory
+
+Most agent-memory systems store your memories with integrity hints, not
+signatures. Letta's `version` column is optimistic locking; Mem0's `hash` is a
+deduplication digest. Anyone with write access to the store can rewrite a
+memory and no verifier can tell — a content hash doesn't help either, since the
+algorithm is public and can be recomputed after editing.
+
+Engram signs records:
+
+```typescript
+import { MemoryManager, MemorySigner } from 'engram';
+
+// Asymmetric: writers sign, other agents verify with only the public key.
+const keys = MemorySigner.generateEd25519KeyPair();
+const signer = new MemorySigner({
+  algorithm: 'ed25519',
+  privateKeyPem: keys.privateKeyPem,
+  publicKeyPem: keys.publicKeyPem,
+});
+
+const manager = new MemoryManager({ signer });
+await manager.encode({ content: 'Q3 revenue grew 18%', type: 'semantic', source: 'analyst' });
+
+// Signed on write; the signature links to the namespace's previous record.
+const memory = (await manager.query({ text: 'Q3 revenue' }))[0].engram;
+await manager.verifyMemory(memory.id);      // true
+await manager.verifyNamespace('default');    // whole-chain audit
+await manager.verifyAll();                   // every namespace
+```
+
+**What is signed, and what deliberately is not**
+
+Signed: `id`, `content`, `type`, `importance`, `source`, `namespace`, `tags`,
+`createdAt`, plus the previous record's digest.
+
+Not signed: `strength`, `stability`, `accessCount`, `lastAccessedAt`, `status`,
+`metadata`, `version`. These change on every recall, decay sweep, or soft
+delete — signing them would invalidate every record after its first read.
+
+**Chains are per namespace, ordered by pointers, not time.** Two memories
+written in the same millisecond share a `createdAt` and carry random UUIDs, so
+a timestamp sort cannot recover write order. The `prev` pointer is the order,
+exactly like a blockchain, which means:
+
+| Attack | Detection |
+|--------|-----------|
+| Edit a memory's content | `signature_invalid` |
+| Copy a signature onto another record | `signature_invalid` (embedded digest mismatch) |
+| Delete a record mid-chain | `missing_signature` — its successor becomes an orphan |
+| Splice in a second chain | `chain_break` |
+| Duplicate an id | `duplicate_id` |
+
+HMAC-SHA256 is available for single-process setups where one shared secret is
+easier to operate than key distribution.
+
+---
+
 ## GraphRAG Memory (multi-hop retrieval)
 
 Traverse relationships between entities to answer multi-hop questions:
@@ -424,6 +482,7 @@ Exposed MCP tools:
 - [x] **Semantic search adapter** (bring-your-own embeddings) ✅ (src/semantic-search.ts)
 - [x] **Auto-importance scoring via LLM judge** ✅ (src/importance-scorer.ts, integrated in v0.5.0)
 - [x] **Shared memory between agents** (multi-agent memory spaces) ✅ (src/memory-space.ts)
+- [x] **Verifiable memory** (`MemorySigner` — Ed25519/HMAC content-bound signatures + per-namespace tamper-evident chains) ✅ (v0.14.0)
 - [x] **Conflict resolution policies** (last-writer-wins / merge / version / custom) ✅ (v0.5.0)
 - [x] **GraphRAG memory** (entity/relation extraction + multi-hop traversal) ✅ (src/graph-memory.ts, v0.5.0)
 - [x] **Encryption at rest** (AES-256-GCM) ✅ (src/encrypted-store.ts, v0.5.0)
