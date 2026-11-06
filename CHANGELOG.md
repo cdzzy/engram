@@ -2,6 +2,19 @@
 
 All notable changes to Engram are documented in this file.
 
+## [0.14.1] - 2026-11-06
+
+### Security
+
+- **Dependency hardening**: pin `minimatch` to `^11.0.5` via npm
+  `overrides`. `@typescript-eslint/typescript-estree` declares
+  `minimatch@^10.2.2`, which resolves to 10.2.6 — inside the advisory range
+  of GHSA-g3hv-75wg-m249 (potential denial of service via globparts
+  amplification). The patched 11.x line is outside the declared semver range,
+  so the override is the only clean fix; dev-dependency only, but `npm audit`
+  is now clean (0 vulnerabilities).
+- Bump `typescript-eslint` to 8.72.1 and refresh the lockfile.
+
 ## [0.14.0] - 2026-11-06
 
 ### Added
