@@ -297,6 +297,39 @@ describe('MemorySigner — chain verification', () => {
     expect(result.errors.some((e) => e.type === 'duplicate_id')).toBe(true);
   });
 
+  it('flags a second chain root in the same namespace', () => {
+    const signer = hmacSigner();
+    const chain = buildChain(signer, 'default', 2);
+    // A record signed with prev=null starts an independent chain. In one
+    // namespace that is a splice, not a continuation.
+    const secondRoot = makeEngram('root2', 2000, 'default');
+    secondRoot.signature = signer.sign(secondRoot);
+
+    const result = signer.verifyChain([...chain, secondRoot]);
+    expect(result.valid).toBe(false);
+    expect(
+      result.errors.some((e) => e.type === 'chain_break' && /second chain/.test(e.message)),
+    ).toBe(true);
+  });
+
+  it('detects a cycle inside the chain', () => {
+    const signer = hmacSigner();
+    const chain = buildChain(signer);
+    // A record whose signature copies the previous one's digest but points
+    // its own prev at that digest: the walk reaches it, then byPrev[digest]
+    // hands it back to itself and would loop forever unless the guard trips.
+    const copied = chain[2].signature as MemorySignature;
+    const forged = makeEngram('forged', 3000);
+    forged.signature = { ...copied, prev: copied.digest };
+    chain.push(forged);
+
+    const result = signer.verifyChain(chain);
+    expect(result.valid).toBe(false);
+    expect(
+      result.errors.some((e) => e.type === 'chain_break' && /cycle/i.test(e.message)),
+    ).toBe(true);
+  });
+
   it('keeps namespaces independent', () => {
     const signer = hmacSigner();
     const a = buildChain(signer, 'team', 2);

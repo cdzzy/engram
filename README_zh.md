@@ -321,9 +321,11 @@ const signer = new MemorySigner({
 const manager = new MemoryManager({ signer });
 await manager.encode({ content: '第三季度营收增长 18%', type: 'semantic', source: 'analyst' });
 
-await manager.verifyMemory(id);        // 单条校验
+// 写入即签名；校验时通过查询取回记录
+const memory = (await manager.query({ text: '第三季度营收' }))[0].engram;
+await manager.verifyMemory(memory.id);   // 单条校验
 await manager.verifyNamespace('default'); // 整条链审计
-await manager.verifyAll();              // 全部命名空间
+await manager.verifyAll();               // 全部命名空间
 ```
 
 **签名覆盖什么、刻意不覆盖什么**
@@ -346,7 +348,20 @@ await manager.verifyAll();              // 全部命名空间
 | 拼接第二条链 | `chain_break` |
 | 重复 id | `duplicate_id` |
 
-单进程场景可改用 HMAC-SHA256（一个共享密钥，比密钥分发更好运维）。
+单进程场景可改用 HMAC-SHA256（一个共享密钥，比密钥分发更好运维）：
+
+```typescript
+import { MemoryManager, MemorySigner } from 'engram';
+
+const signer = new MemorySigner({
+  algorithm: 'hmac-sha256',
+  hmacSecret: process.env.ENGRAM_MEMORY_SECRET!,
+});
+const manager = new MemoryManager({ signer });
+
+// API 与 Ed25519 完全一致：写入即签名，事后用
+// verifyMemory / verifyNamespace / verifyAll 审计。
+```
 
 ---
 

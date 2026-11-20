@@ -393,7 +393,20 @@ exactly like a blockchain, which means:
 | Duplicate an id | `duplicate_id` |
 
 HMAC-SHA256 is available for single-process setups where one shared secret is
-easier to operate than key distribution.
+easier to operate than key distribution:
+
+```typescript
+import { MemoryManager, MemorySigner } from 'engram';
+
+const signer = new MemorySigner({
+  algorithm: 'hmac-sha256',
+  hmacSecret: process.env.ENGRAM_MEMORY_SECRET!,
+});
+const manager = new MemoryManager({ signer });
+
+// Same API as Ed25519: records are signed on write, and
+// verifyMemory / verifyNamespace / verifyAll audit them afterwards.
+```
 
 ---
 

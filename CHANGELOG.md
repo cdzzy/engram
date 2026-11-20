@@ -2,6 +2,22 @@
 
 All notable changes to Engram are documented in this file.
 
+## [Unreleased]
+
+### Docs
+
+- **HMAC-SHA256 usage guide**: document the symmetric `MemorySigner` mode
+  in `src/verifiable-memory.ts` and both READMEs — the previous docs only
+  covered Ed25519; the two modes are now API-aligned with code examples.
+- Fix a broken zh-CN README example (`verifyMemory` referenced an undefined
+  `id`; it now resolves the memory first, matching the English version).
+
+### Tests
+
+- 2 new `verifyChain` tests: a second chain root in the same namespace is
+  reported as a `chain_break`, and a cycle (self-referencing digest) triggers
+  the cycle guard (304 → 306 passing).
+
 ## [0.14.1] - 2026-11-06
 
 ### Security

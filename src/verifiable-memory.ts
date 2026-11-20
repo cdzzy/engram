@@ -26,7 +26,7 @@
  * namespace is tamper-evident: deleting a record from the middle, reordering,
  * or splicing in a record from another namespace all break the chain.
  *
- * Usage::
+ * Usage — Ed25519 (multi-agent fleets)::
  *
  *   const keys = MemorySigner.generateEd25519KeyPair();
  *   const signer = new MemorySigner({
@@ -41,6 +41,12 @@
  *   const verifier = new MemorySigner({ algorithm: 'ed25519', publicKeyPem: keys.publicKeyPem });
  *   verifier.verify(memory, memory.signature);        // true
  *   verifier.verifyChains(await store.query({}));      // whole-store audit
+ *
+ * Usage — HMAC-SHA256 (single process, one shared secret)::
+ *
+ *   const signer = new MemorySigner({ algorithm: 'hmac-sha256', hmacSecret: process.env.ENGRAM_MEMORY_SECRET });
+ *   const manager = new MemoryManager({ signer });
+ *   // Same API: sign() on write, verify() / verifyChain() / verifyChains() to audit.
  */
 
 import {
